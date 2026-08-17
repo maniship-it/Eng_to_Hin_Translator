@@ -21,7 +21,7 @@ from typing import Dict, Iterable, List, Optional, Sequence
 
 from .model import app_root, user_data_dir
 
-DICTIONARY_ENV_VAR = "ENTOHIN_DICTIONARY"
+DICTIONARY_ENV_VAR = "SETU_DICTIONARY"
 
 #: Location of the database relative to a search root.
 DICTIONARY_PATH = os.path.join("models", "dictionary", "dictionary.sqlite")

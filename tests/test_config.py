@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from entohin.config import Settings
+from setu.config import Settings
 
 
 class TestSettings:

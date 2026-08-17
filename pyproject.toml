@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "entohin"
+name = "setu"
 version = "1.0.0"
-description = "Offline English to Hindi translator with a Tkinter desktop interface"
+description = "SETU — offline English to Hindi translator and dictionary"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -15,10 +15,10 @@ dependencies = [
 ]
 
 [project.scripts]
-entohin = "entohin.__main__:main"
+setu = "setu.__main__:main"
 
 [project.gui-scripts]
-entohin-gui = "entohin.gui:main"
+setu-gui = "setu.gui:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

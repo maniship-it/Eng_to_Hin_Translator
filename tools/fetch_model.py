@@ -58,7 +58,7 @@ def download(urls: Iterable[str], destination: Path) -> Path:
     for url in urls:
         print("Downloading %s" % url)
         try:
-            request = Request(url, headers={"User-Agent": "EngToHinTranslator/1.0"})
+            request = Request(url, headers={"User-Agent": "Setu/1.0"})
             with urlopen(request, timeout=60) as response:
                 total = int(response.headers.get("Content-Length") or 0)
                 downloaded = 0
@@ -196,7 +196,7 @@ def verify(dest: Path) -> bool:
     """Load the installed model and run one sentence through it."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
     try:
-        from entohin.translator import build_translator
+        from setu.translator import build_translator
     except ImportError as exc:
         print("\nInstalled to %s" % dest)
         print("Could not import the app to verify (%s)." % exc)

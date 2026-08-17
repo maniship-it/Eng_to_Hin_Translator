@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from entohin.translator import (
+from setu.translator import (
     Options,
     TranslationCancelled,
     Translator,

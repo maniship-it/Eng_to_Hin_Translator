@@ -83,8 +83,8 @@ def pump(app, predicate, timeout: float = 90.0) -> bool:
 
 @pytest.fixture
 def app(tk_available, ct2_model_dir, dictionary_path, monkeypatch):
-    from entohin import gui as gui_module
-    from entohin.config import Settings
+    from setu import gui as gui_module
+    from setu.config import Settings
 
     dialogs = DialogRecorder()
     picker = FilePicker()
@@ -96,6 +96,8 @@ def app(tk_available, ct2_model_dir, dictionary_path, monkeypatch):
     settings = Settings()
     settings.model_dir = str(ct2_model_dir)
     settings.dictionary_path = str(dictionary_path)
+    # The first-run walkthrough is exercised by its own test, not every test.
+    settings.shown_quick_start = True
 
     instance = gui_module.TranslatorApp(settings)
     instance.dialogs = dialogs
@@ -252,7 +254,7 @@ class TestViewActions:
 
 class TestSettingsDialog:
     def test_saving_settings_applies_them(self, app):
-        from entohin.gui import SettingsDialog
+        from setu.gui import SettingsDialog
 
         dialog = SettingsDialog(app)
         app.update()
@@ -267,7 +269,7 @@ class TestSettingsDialog:
         assert pump(app, lambda: not app._busy)
 
     def test_cancelling_changes_nothing(self, app):
-        from entohin.gui import SettingsDialog
+        from setu.gui import SettingsDialog
 
         before = app.settings.beam_size
         dialog = SettingsDialog(app)
@@ -422,12 +424,80 @@ class TestDictionaryTab:
                                                          monkeypatch):
         app.dictionary_panel.close()
         app.settings.dictionary_path = str(tmp_path / "absent.sqlite")
-        monkeypatch.setenv("ENTOHIN_DICTIONARY", str(tmp_path / "absent.sqlite"))
-        monkeypatch.setattr("entohin.dictionary.app_root", lambda: tmp_path)
-        monkeypatch.setattr("entohin.dictionary.user_data_dir", lambda: tmp_path)
+        monkeypatch.setenv("SETU_DICTIONARY", str(tmp_path / "absent.sqlite"))
+        monkeypatch.setattr("setu.dictionary.app_root", lambda: tmp_path)
+        monkeypatch.setattr("setu.dictionary.user_data_dir", lambda: tmp_path)
         assert not app.dictionary_panel.ensure_loaded()
         app.update()
         shown = app.dictionary_panel.view.get("1.0", "end-1c")
         assert "not available" in shown.lower()
         # The translator itself must keep working.
         assert app.translator is not None
+
+
+class TestFirstRunAndChrome:
+    """The parts a brand-new user meets before anything else."""
+
+    def test_quick_start_dialog_opens_and_closes(self, app):
+        from setu.gui import QUICK_START, QuickStartDialog
+
+        dialog = QuickStartDialog(app)
+        app.update()
+        assert dialog.winfo_exists()
+        assert len(QUICK_START) >= 5
+        dialog.destroy()
+        app.update()
+
+    def test_quick_start_shows_automatically_on_first_run(self, app):
+        from setu.gui import QuickStartDialog
+
+        app.settings.shown_quick_start = False
+        app._maybe_show_quick_start()
+        app.update()
+        opened = [w for w in app.winfo_children()
+                  if isinstance(w, QuickStartDialog)]
+        assert opened, "the walkthrough should open on first run"
+        # And it must not reappear on every start.
+        assert app.settings.shown_quick_start is True
+        for dialog in opened:
+            dialog.destroy()
+        app.update()
+
+    def test_quick_start_does_not_reopen_once_seen(self, app):
+        from setu.gui import QuickStartDialog
+
+        app.settings.shown_quick_start = True
+        app._maybe_show_quick_start()
+        app.update()
+        assert not [w for w in app.winfo_children()
+                    if isinstance(w, QuickStartDialog)]
+
+    def test_window_title_and_tip_bar(self, app):
+        assert "SETU" in app.title()
+        assert app.tip_label.cget("text").startswith("Tip:")
+
+    def test_tips_rotate(self, app):
+        from setu.gui import TIPS
+
+        first = app.tip_label.cget("text")
+        app._rotate_tip()
+        app.update()
+        assert app.tip_label.cget("text") != first or len(TIPS) == 1
+
+    def test_tooltip_appears_and_disappears(self, app):
+        from setu.gui import Tooltip
+
+        tooltip = Tooltip(app.translate_button, "Translate the text")
+        tooltip._show()
+        app.update()
+        assert tooltip.window is not None
+        tooltip._hide()
+        app.update()
+        assert tooltip.window is None
+
+    def test_tooltip_with_no_text_does_nothing(self, app):
+        from setu.gui import Tooltip
+
+        tooltip = Tooltip(app.translate_button, "")
+        tooltip._show()
+        assert tooltip.window is None

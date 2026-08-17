@@ -3,13 +3,15 @@
 Run this ONCE on a machine with internet access (any OS -- the Windows wheels
 are downloaded cross-platform).  It produces::
 
-    dist/EngToHinTranslator-Offline/
-        wheels/               every Python dependency as a .whl
+    dist/Setu-Offline/
+        lib/                  every dependency, already unpacked
         models/en_hi/         the neural translation model
         models/dictionary/    the English-Hindi dictionary database
         src/                  the application
-        tools/  scripts/ helper scripts, install.bat, run.bat
-        requirements.txt README.md INSTALL.txt
+        Start SETU.bat        double-click to run -- no install step
+        Check SETU.bat        confirms everything is in place
+        vc_redist.x64.exe     Microsoft C++ runtime, only if the PC lacks it
+        INSTALL.txt README.md
 
 Copy that folder (or the .zip it can produce) to the offline PC and run
 ``install.bat``.  Nothing in the install step touches the network.
@@ -28,10 +30,16 @@ import argparse
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from setu.runtime import VC_REDIST_FILENAME, VC_REDIST_URL  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = PROJECT_ROOT / "dist" / "EngToHinTranslator-Offline"
+DEFAULT_OUTPUT = PROJECT_ROOT / "dist" / "Setu-Offline"
 
 #: Copied verbatim into the bundle.
 SOURCE_ITEMS = [
@@ -44,6 +52,7 @@ SOURCE_ITEMS = [
     "requirements-dev.txt",
     "pyproject.toml",
     "README.md",
+    "INSTALLATION.md",
     "LICENSE",
 ]
 
@@ -100,6 +109,68 @@ def download_wheels(output: Path, python_version: str, platform: str,
         print("    %s" % wheel.name)
 
 
+def unpack_wheels(wheel_dir: Path, lib_dir: Path) -> None:
+    """Unpack every wheel into ``lib`` so the app runs with no install step.
+
+    A wheel is a zip whose contents go straight onto ``sys.path``; for these
+    packages nothing else is needed.  Doing it here rather than on the target
+    PC means the offline machine needs no pip, no virtual environment and no
+    administrator rights -- only Python itself.
+    """
+    if lib_dir.exists():
+        shutil.rmtree(lib_dir)
+    lib_dir.mkdir(parents=True, exist_ok=True)
+
+    wheels = sorted(wheel_dir.glob("*.whl"))
+    if not wheels:
+        raise SystemExit("No wheels found in %s" % wheel_dir)
+
+    print("Unpacking %d wheels into lib/ …" % len(wheels))
+    skipped = {"pip", "setuptools", "wheel"}
+    for wheel in wheels:
+        name = wheel.name.split("-")[0].lower().replace("_", "-")
+        if name in skipped:
+            # Only needed to install things; nothing is installed.
+            continue
+        with zipfile.ZipFile(wheel) as archive:
+            for member in archive.infolist():
+                target = (lib_dir / member.filename).resolve()
+                if not str(target).startswith(str(lib_dir.resolve())):
+                    raise SystemExit("Unsafe path in %s: %s"
+                                     % (wheel.name, member.filename))
+            archive.extractall(lib_dir)
+        print("  %s" % wheel.name)
+
+    print("  lib/ is %s" % _human(_directory_size(lib_dir)))
+
+
+def fetch_vc_redist(destination: Path) -> bool:
+    """Download Microsoft's C++ runtime installer into the bundle.
+
+    CTranslate2 needs MSVCP140.dll and VCRUNTIME140_1.dll, which Python does
+    not provide.  Most Windows PCs already have them; carrying the official
+    installer means a machine that does not can be fixed without internet.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    print("Downloading the Microsoft C++ runtime (%s) …" % VC_REDIST_URL)
+    try:
+        request = Request(VC_REDIST_URL, headers={"User-Agent": "Setu/1.0"})
+        with urlopen(request, timeout=120) as response:
+            data = response.read()
+        if len(data) < 1_000_000:
+            raise ValueError("file is too small to be the real installer")
+        destination.write_bytes(data)
+    except (URLError, OSError, ValueError) as exc:
+        print("  [warn] could not download it: %s" % exc)
+        print("  The bundle will still work on any PC that already has the")
+        print("  runtime (most do). To add it later, download")
+        print("    %s" % VC_REDIST_URL)
+        print("  and place it at %s" % destination)
+        return False
+    print("  saved %s (%s)" % (destination.name, _human(len(data))))
+    return True
+
+
 def fetch_model(destination: Path, archive: str = "") -> None:
     """Download and install the translation model into the bundle."""
     sys.path.insert(0, str(PROJECT_ROOT / "tools"))
@@ -143,70 +214,106 @@ def copy_sources(output: Path) -> None:
 
 
 INSTALL_TXT = """\
-English to Hindi Translator - offline installation
-==================================================
+==============================================================
+  SETU - English to Hindi Translator
+  Offline installation guide
+==============================================================
 
-This folder installs and runs with NO internet connection.
+SETU runs entirely on this PC. It never uses the internet.
 
-WHAT YOU NEED ON THE OFFLINE PC
--------------------------------
-  * Windows 10 or 11, 64-bit
-  * Python {pyver_dotted} (64-bit) from python.org
-      - During setup tick "Add python.exe to PATH"
-      - Keep "tcl/tk and IDLE" ticked (this provides the window toolkit)
-    If the offline PC has no Python, copy the python installer .exe onto the
-    same USB stick from python.org/downloads/windows and run it first.
 
-INSTALL
--------
-  1. Copy this whole folder to the offline PC, for example C:\\EngToHin
-  2. Double-click  install.bat
-     It creates a private virtual environment and installs the bundled
-     wheels from the wheels\\ folder. Nothing is downloaded.
+WHAT YOU NEED
+-------------
+  Windows 10 or 11, 64-bit, and Python {pyver_dotted} (64-bit).
+  Nothing else. There is no setup program and nothing gets installed.
 
-RUN
----
-  Double-click  run.bat
 
-  Or, to translate a file from the command line:
-      .venv\\Scripts\\python.exe -m entohin --file input.txt --out hindi.txt
+STEP 1 - INSTALL PYTHON (only once, only if it is missing)
+----------------------------------------------------------
+  To check, press the Windows key, type "python" and see if it appears.
 
-CHECK THE INSTALL
+  If not, run the Python {pyver_dotted} installer from the USB stick
+  (or download it from python.org/downloads/windows).
+
+  On the first screen of the installer:
+
+      [x] Add python.exe to PATH     <-- TICK THIS BOX
+
+  then click "Install Now" and keep the "tcl/tk and IDLE" option
+  ticked when offered. That option provides the window toolkit.
+
+
+STEP 2 - COPY THE FOLDER
+------------------------
+  Copy this whole SETU folder to the PC, for example to:
+
+      C:\\SETU
+
+  Keep the folder together. Everything it needs is inside it.
+
+
+STEP 3 - START IT
 -----------------
-  Double-click  check.bat   (prints a report and a test translation)
+  Double-click:   Start SETU.bat
 
-TROUBLESHOOTING
----------------
+  That is all. The window opens in a few seconds.
+
+  To put it on the desktop: right-click "Start SETU.bat",
+  choose "Send to" then "Desktop (create shortcut)".
+
+
+IF SOMETHING IS WRONG
+---------------------
+  Double-click "Check SETU.bat". It prints a report saying exactly
+  what is missing and what to do about it.
+
+
   "Python was not found"
-      Python is not installed or not on PATH. Re-run the Python installer
-      and tick "Add python.exe to PATH".
+      Python is not installed, or "Add python.exe to PATH" was not
+      ticked during setup. Re-run the Python installer and tick it.
 
-  "No matching distribution found"
-      The wheels were built for Python {pyver_dotted}. Install that version,
-      or rebuild the bundle on an online PC with:
-          python tools\\make_offline_bundle.py --python-version <version>
+  "One component is missing" / "DLL load failed"
+      This PC does not have the Microsoft C++ runtime. Double-click
+      vc_redist.x64.exe in this folder, accept the prompt, then start
+      SETU again. It is a free Microsoft component and takes a minute.
+      Most PCs already have it, so you will probably never see this.
 
   Hindi shows as boxes
-      Install or select a Devanagari font (Tools -> Settings -> Hindi font).
-      Windows ships with "Nirmala UI" and "Mangal".
+      Tools > Settings, and choose a Devanagari font such as
+      "Nirmala UI" or "Mangal". Both come with Windows.
 
   "No translation model found"
-      The models\\en_hi folder is missing. Copy it from this bundle into the
-      installation folder, or use Tools -> Choose model folder in the app.
+      The models folder did not get copied. Copy it again from the
+      USB stick into the SETU folder.
 
-  "No dictionary database found"
-      The models\\dictionary folder is missing. The translator still works;
-      only the Dictionary tab needs it. Copy the folder across, or use
-      Dictionary -> Choose dictionary file in the app.
 
-USING THE DICTIONARY
---------------------
-  Open the Dictionary tab, or press Ctrl+D. You can also double-click any
-  word in the translation panes to look it up.
+USING SETU
+----------
+  Translate      Type or paste English on the left, press the blue
+                 Translate button (or Ctrl+Enter).
+  A whole file   File > Open text file.
+  Save           File > Save translation, or Save side-by-side for
+                 English and Hindi in two columns.
+  Dictionary     Press Ctrl+D, or double-click any word to look it up.
+                 Meanings, synonyms, antonyms and examples.
+  Glossary       Dictionary > Administrative glossary - official
+                 government terms in English and Hindi.
 
-  It gives Hindi meanings, part of speech, English and Hindi definitions,
-  synonyms and antonyms, and example sentences - plus a glossary of central
-  government administrative terms in both languages.
+  Press F1 inside the app for the quick start guide.
+
+
+WHAT IS IN THIS FOLDER
+----------------------
+  Start SETU.bat        double-click this to run SETU
+  Check SETU.bat        checks the installation and reports problems
+  Setu.py               the launcher that Start SETU.bat calls
+  lib\\                 the libraries SETU needs, ready to use
+  src\\                 the application itself
+  models\\en_hi\\        the translation model
+  models\\dictionary\\   the dictionary database
+  data\\                the government terminology glossary
+  vc_redist.x64.exe     Microsoft C++ runtime, only if the PC needs it
+  README.md             full documentation
 """
 
 
@@ -223,7 +330,7 @@ def write_bundle_docs(output: Path, python_version: str) -> None:
 
 
 def copy_bat_files(output: Path) -> None:
-    for name in ("install.bat", "run.bat", "check.bat"):
+    for name in ("Start SETU.bat", "Check SETU.bat", "Setu.py"):
         source = PROJECT_ROOT / "scripts" / name
         if source.exists():
             shutil.copy2(source, output / name)
@@ -241,8 +348,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT),
                         help="Bundle folder to create (default: %s)" % DEFAULT_OUTPUT)
-    parser.add_argument("--python-version", default="311",
-                        help="Target Python on the offline PC: 311, 312 or 313.")
+    parser.add_argument("--python-version", default="313",
+                        help="Target Python on the offline PC (default 313).")
     parser.add_argument("--platform", default="win_amd64",
                         help="Target platform tag (default: win_amd64).")
     parser.add_argument("--skip-model", action="store_true",
@@ -251,6 +358,10 @@ def main(argv=None) -> int:
                         help="Do not download wheels (model and code only).")
     parser.add_argument("--skip-dictionary", action="store_true",
                         help="Do not build the dictionary database.")
+    parser.add_argument("--skip-runtime", action="store_true",
+                        help="Do not include the Microsoft C++ runtime installer.")
+    parser.add_argument("--keep-wheels", action="store_true",
+                        help="Keep the downloaded .whl files beside lib/.")
     parser.add_argument("--model-archive", default="",
                         help="Use an already-downloaded .argosmodel file.")
     parser.add_argument("--zip", action="store_true",
@@ -266,6 +377,13 @@ def main(argv=None) -> int:
             output / "wheels", args.python_version, args.platform,
             PROJECT_ROOT / "requirements.txt",
         )
+        unpack_wheels(output / "wheels", output / "lib")
+        if not args.keep_wheels:
+            shutil.rmtree(output / "wheels")
+        print()
+
+    if not args.skip_runtime:
+        fetch_vc_redist(output / VC_REDIST_FILENAME)
         print()
 
     if not args.skip_model:
@@ -288,7 +406,8 @@ def main(argv=None) -> int:
         print("Zip: %s (%s)" % (archive, _human(archive.stat().st_size)))
 
     print(
-        "\nCopy the folder to the offline PC and run install.bat, then run.bat."
+        "\nCopy this folder to the offline PC and double-click 'Start SETU.bat'."
+        "\nNothing needs to be installed there except Python itself."
     )
     return 0
 

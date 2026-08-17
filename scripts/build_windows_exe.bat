@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
-title Build standalone Windows .exe
+title SETU - build standalone .exe
 cd /d "%~dp0.."
 
 echo ============================================================
-echo   Building a standalone EngToHinTranslator.exe
+echo   Building a standalone Setu.exe
 echo ============================================================
 echo.
 echo Run this on an ONLINE Windows PC. The result needs no Python
@@ -38,21 +38,21 @@ if not exist "models\dictionary\dictionary.sqlite" (
 
 echo.
 echo Running PyInstaller ...
-python -m PyInstaller --noconfirm entohin.spec
+python -m PyInstaller --noconfirm setu.spec
 if errorlevel 1 goto :failed
 
 echo.
 echo Copying the model next to the executable ...
-xcopy /E /I /Y "models" "dist\EngToHinTranslator\models" >nul
+xcopy /E /I /Y "models" "dist\Setu\models" >nul
 if errorlevel 1 goto :failed
 
 echo.
 echo ============================================================
-echo   Done: dist\EngToHinTranslator\EngToHinTranslator.exe
+echo   Done: dist\Setu\Setu.exe
 echo ============================================================
 echo.
-echo Copy the whole dist\EngToHinTranslator folder to the offline PC
-echo and double-click EngToHinTranslator.exe. No install needed.
+echo Copy the whole dist\Setu folder to the offline PC
+echo and double-click Setu.exe. No install needed.
 echo.
 pause
 exit /b 0

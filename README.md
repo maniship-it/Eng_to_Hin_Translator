@@ -1,12 +1,16 @@
-# English → Hindi Translator
+# SETU — English → Hindi Translator
 
-A desktop English-to-Hindi translator that runs **completely offline** on a
-Windows PC. Neural machine translation, a Tkinter interface, and no network
-access at any point after installation.
+**सेतु** *(“bridge”)* — a desktop English-to-Hindi translator with a bilingual
+dictionary, running **completely offline** on a Windows PC. Neural machine
+translation, a Tkinter interface, and no network access ever.
 
-Built for the case where the translating PC has no internet at all: you prepare
-a bundle once on a connected machine, carry it across on a USB stick, and
-install from that bundle.
+Built for the case where the translating PC has no internet at all: prepare a
+bundle once on a connected machine, carry it across on a USB stick, and
+double-click one file. **Nothing is installed on the offline PC except Python
+itself** — no pip, no virtual environment, no administrator rights.
+
+> **Installing it?** The step-by-step guide is
+> **[INSTALLATION.md](INSTALLATION.md)**.
 
 ---
 
@@ -51,11 +55,16 @@ the Python wheels cannot be conjured on the offline PC. That is what
 
 If someone has already handed you the bundle folder:
 
-1. Copy the folder to the PC, e.g. `C:\EngToHin`
-2. Double-click **`install.bat`**
-3. Double-click **`run.bat`**
+1. Install **Python 3.13 (64-bit)**, ticking *“Add python.exe to PATH”* — only
+   if the PC does not already have it
+2. Copy the folder to the PC, e.g. `C:\SETU`
+3. Double-click **`Start SETU.bat`**
 
-That is the whole installation. Nothing is downloaded.
+That is the whole installation. Nothing is downloaded and nothing is installed
+— the libraries travel unpacked in `lib/` and are loaded straight from there.
+
+Full details, including what to do when something goes wrong:
+**[INSTALLATION.md](INSTALLATION.md)**.
 
 ---
 
@@ -69,22 +78,25 @@ git clone <this repository>
 cd Eng_to_Hin_Translator
 
 pip install -r requirements.txt
-python tools/make_offline_bundle.py --python-version 311 --zip
+python tools/make_offline_bundle.py --zip
 ```
 
-This produces `dist/EngToHinTranslator-Offline/` (and a `.zip`) containing:
+This produces `dist/Setu-Offline/` (and a `.zip`) containing:
 
 ```
-wheels/             every Python dependency as a .whl
+lib/                every dependency, already unpacked — no pip needed
 models/en_hi/       the neural translation model
 models/dictionary/  the English-Hindi dictionary database
 src/  data/         the application and its glossary
-tools/ scripts/     helper scripts
-install.bat  run.bat  check.bat  INSTALL.txt
+Start SETU.bat      double-click to run
+Check SETU.bat      diagnoses any problem in plain language
+vc_redist.x64.exe   Microsoft C++ runtime, used only if the PC lacks it
+INSTALL.txt
 ```
 
-Match `--python-version` to the Python you will install on the offline PC —
-`311`, `312` and `313` all work. Copy the folder onto a USB stick.
+It targets **Python 3.13** by default; pass `--python-version 312` to match a
+different one. Copy the folder onto a USB stick, along with the Python
+installer from python.org.
 
 > **If the offline PC has no Python at all**, also put the Python installer
 > from [python.org/downloads/windows](https://www.python.org/downloads/windows/)
@@ -129,18 +141,22 @@ python tools/build_dictionary.py --wordnet wordnet.zip --freedict eng-hin.tei
 
 ## Step 2 — install on the offline PC
 
-**Requirements:** Windows 10/11 64-bit, and 64-bit Python 3.11+ installed with
-*"Add python.exe to PATH"* and *"tcl/tk and IDLE"* both ticked.
+**Requirements:** Windows 10/11 64-bit, and 64-bit Python 3.13 installed with
+*"Add python.exe to PATH"* and *"tcl/tk and IDLE"* both ticked. That is the
+complete dependency list.
 
-Run **`install.bat`**. It:
+Copy the folder across and double-click **`Start SETU.bat`**. There is no
+install step: the launcher puts `lib/` and `src/` on the import path and starts
+the app.
 
-1. finds Python and checks that Tkinter is present,
-2. creates a private virtual environment in `.venv`,
-3. installs the bundled wheels with `pip install --no-index --find-links wheels`,
-4. runs a self-check and prints a test translation.
+**`Check SETU.bat`** verifies everything and names the fix for anything that is
+wrong.
 
-Then run **`run.bat`** to start the app, or **`check.bat`** at any time to
-re-verify the installation.
+One caveat worth knowing: CTranslate2 links against Microsoft's C++ runtime
+(`MSVCP140.dll`, `VCRUNTIME140_1.dll`), which the Python installer does *not*
+provide. Nearly every Windows PC already has it. If this one does not, SETU
+says so plainly and points at the bundled `vc_redist.x64.exe` — one
+double-click, no internet needed.
 
 ---
 
@@ -168,7 +184,7 @@ bullet or numbered list markers are kept, and lines that contain no letters
 thread with a live sentence counter, so a long document neither freezes the
 window nor blocks cancellation.
 
-Settings live in `%LOCALAPPDATA%\EngToHinTranslator\settings.json`.
+Settings live in `%LOCALAPPDATA%\Setu\settings.json`.
 
 ---
 
@@ -235,24 +251,24 @@ The same engine without the GUI:
 
 ```bat
 rem verify the installation and print a test translation
-.venv\Scripts\python.exe -m entohin --check
+.venv\Scripts\python.exe -m setu --check
 
 rem translate a file
-.venv\Scripts\python.exe -m entohin --file input.txt --out hindi.txt
+.venv\Scripts\python.exe -m setu --file input.txt --out hindi.txt
 
 rem to standard output, with a bigger beam for slightly better output
-.venv\Scripts\python.exe -m entohin --file input.txt --beam-size 6
+.venv\Scripts\python.exe -m setu --file input.txt --beam-size 6
 
 rem dictionary lookup, in either language
-.venv\Scripts\python.exe -m entohin --define sanction
-.venv\Scripts\python.exe -m entohin --define अधिसूचना
+.venv\Scripts\python.exe -m setu --define sanction
+.venv\Scripts\python.exe -m setu --define अधिसूचना
 
 rem print the whole administrative glossary
-.venv\Scripts\python.exe -m entohin --admin-glossary
+.venv\Scripts\python.exe -m setu --admin-glossary
 ```
 
-`--model-dir` overrides where the model is found, as does the `ENTOHIN_MODEL_DIR`
-environment variable. `--dictionary` and `ENTOHIN_DICTIONARY` do the same for
+`--model-dir` overrides where the model is found, as does the `SETU_MODEL_DIR`
+environment variable. `--dictionary` and `SETU_DICTIONARY` do the same for
 the dictionary database.
 
 ---
@@ -266,7 +282,7 @@ application on an **online Windows** PC:
 scripts\build_windows_exe.bat
 ```
 
-This produces `dist\EngToHinTranslator\` containing `EngToHinTranslator.exe`,
+This produces `dist\Setu\` containing `Setu.exe`,
 its dependencies and the model. Copy that whole folder to the offline PC and
 double-click the `.exe` — there is nothing to install.
 
@@ -334,6 +350,7 @@ important output reviewed by a Hindi speaker.**
 |---|---|
 | `Python was not found` | Install 64-bit Python from python.org with *"Add python.exe to PATH"* ticked. |
 | `No module named tkinter` | Re-run the Python installer and enable *"tcl/tk and IDLE"*. |
+| `DLL load failed` / "One component is missing" | Double-click `vc_redist.x64.exe` in the SETU folder. |
 | `No matching distribution found` | The wheels target a different Python version — see `bundle-info.txt`, and rebuild with `--python-version` to match. |
 | `No translation model found` | Copy `models\en_hi` next to the app, or use Tools → Choose model folder. |
 | Hindi shows as boxes `□□□` | Pick a Devanagari font in Tools → Settings. Windows ships with *Nirmala UI* and *Mangal*. |
@@ -344,14 +361,14 @@ important output reviewed by a Hindi speaker.**
 | Dictionary tab says "not available" | The `models\dictionary` folder is missing. Copy it across, or use Dictionary → Choose dictionary file. The translator is unaffected. |
 | A word is not in the dictionary | Try its base form. Coverage is ~150,000 head words, but not every inflection or proper noun is present. |
 
-Run `check.bat` to get a full diagnostic report.
+Run **`Check SETU.bat`** to get a full diagnostic report.
 
 ---
 
 ## Project layout
 
 ```
-src/entohin/
+src/setu/
     __main__.py      CLI entry point and --check diagnostics
     gui.py           Tkinter interface
     translator.py    engine: batching, caching, verification, fallbacks
@@ -370,7 +387,7 @@ tools/
     make_offline_bundle.py build the offline installation folder
     make_test_model.py     build a tiny random model for the test suite
 scripts/
-    install.bat  run.bat  check.bat  build_windows_exe.bat
+    Start SETU.bat  Check SETU.bat  Setu.py  build_windows_exe.bat
 tests/           301 tests
 ```
 

@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from entohin import model as model_module
+from setu import model as model_module
 
 
 def _make_model_tree(root, spm_name="sentencepiece.model", nested=True):

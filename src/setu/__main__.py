@@ -1,11 +1,13 @@
-"""Entry point: ``python -m entohin`` starts the GUI, or translates a file.
+"""Entry point: ``python -m setu`` starts the GUI, or works from the terminal.
 
 Examples::
 
-    python -m entohin                       # start the desktop app
-    python -m entohin --file input.txt      # translate a file to stdout
-    python -m entohin --file in.txt -o out.txt
-    python -m entohin --check               # verify the offline install
+    python -m setu                       # start the desktop app
+    python -m setu --file input.txt      # translate a file to stdout
+    python -m setu --file in.txt -o out.txt
+    python -m setu --define sanction     # look a word up
+    python -m setu --admin-glossary      # list the government glossary
+    python -m setu --check               # verify the installation
 """
 
 from __future__ import annotations
@@ -17,8 +19,8 @@ from pathlib import Path
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="entohin",
-        description="Offline English to Hindi translator.",
+        prog="setu",
+        description="SETU — offline English to Hindi translator and dictionary.",
     )
     parser.add_argument("--file", "-f", help="Translate this text file instead of "
                                              "starting the GUI.")
@@ -44,26 +46,20 @@ def _check(model_dir: str = "", dictionary_path: str = "") -> int:
     """Verify dependencies and the model, printing a readable report."""
     from .version import __version__
 
-    print("English → Hindi Translator %s" % __version__)
+    print("SETU — English to Hindi Translator %s" % __version__)
     print("Python %s" % sys.version.split()[0])
 
-    ok = True
-    for name in ("ctranslate2", "sentencepiece"):
-        try:
-            module = __import__(name)
-            version = getattr(module, "__version__", "installed")
-            print("  [ok]   %s %s" % (name, version))
-        except ImportError as exc:
-            ok = False
-            print("  [FAIL] %s is missing (%s)" % (name, exc))
+    from .runtime import check_dependencies
 
-    try:
-        import tkinter  # noqa: F401
-        print("  [ok]   tkinter")
-    except ImportError:
+    ok = True
+    for result in check_dependencies():
+        if result.ok:
+            print("  [ok]   %s %s" % (result.name, result.detail))
+            continue
         ok = False
-        print("  [FAIL] tkinter is missing — reinstall Python with the "
-              "'tcl/tk and IDLE' option enabled.")
+        print("  [FAIL] %s — %s" % (result.name, result.detail))
+        for line in result.remedy.splitlines():
+            print("         %s" % line)
 
     from . import model as model_module
 

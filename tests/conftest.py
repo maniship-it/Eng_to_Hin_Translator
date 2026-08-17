@@ -13,7 +13,7 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from entohin.translator import Backend, Options, Translator  # noqa: E402
+from setu.translator import Backend, Options, Translator  # noqa: E402
 
 PLACEHOLDER_RE = re.compile(r"^#\d+#$")
 
@@ -133,7 +133,7 @@ def dictionary_path(tmp_path_factory) -> Path:
 
 @pytest.fixture
 def dictionary(dictionary_path):
-    from entohin.dictionary import Dictionary
+    from setu.dictionary import Dictionary
 
     instance = Dictionary.open(dictionary_path)
     yield instance

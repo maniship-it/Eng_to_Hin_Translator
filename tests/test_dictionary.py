@@ -10,7 +10,7 @@ import sqlite3
 
 import pytest
 
-from entohin.dictionary import (
+from setu.dictionary import (
     Dictionary,
     DictionaryError,
     DictionaryNotFoundError,
@@ -52,13 +52,13 @@ class TestOpening:
             Dictionary.open(path)
 
     def test_discovery_uses_the_environment_variable(self, dictionary_path, monkeypatch):
-        monkeypatch.setenv("ENTOHIN_DICTIONARY", str(dictionary_path))
+        monkeypatch.setenv("SETU_DICTIONARY", str(dictionary_path))
         assert discover_dictionary() == dictionary_path
 
     def test_discovery_reports_where_it_looked(self, tmp_path, monkeypatch):
-        monkeypatch.delenv("ENTOHIN_DICTIONARY", raising=False)
-        monkeypatch.setattr("entohin.dictionary.app_root", lambda: tmp_path / "app")
-        monkeypatch.setattr("entohin.dictionary.user_data_dir", lambda: tmp_path / "u")
+        monkeypatch.delenv("SETU_DICTIONARY", raising=False)
+        monkeypatch.setattr("setu.dictionary.app_root", lambda: tmp_path / "app")
+        monkeypatch.setattr("setu.dictionary.user_data_dir", lambda: tmp_path / "u")
         with pytest.raises(DictionaryNotFoundError, match="Looked in"):
             discover_dictionary()
 

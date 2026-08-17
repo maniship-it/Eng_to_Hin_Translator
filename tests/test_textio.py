@@ -6,7 +6,7 @@ import codecs
 
 import pytest
 
-from entohin import textio
+from setu import textio
 
 SAMPLE = "Hello there. This is a test.\nSecond line."
 

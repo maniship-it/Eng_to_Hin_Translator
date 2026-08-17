@@ -4,9 +4,9 @@
 Build it on Windows with::
 
     pip install -r requirements-dev.txt
-    pyinstaller entohin.spec
+    pyinstaller setu.spec
 
-The result is ``dist/EngToHinTranslator/`` containing EngToHinTranslator.exe
+The result is ``dist/Setu/`` containing Setu.exe
 and everything it needs -- no Python installation required on the target PC.
 
 The model is deliberately NOT embedded: it is large and changes independently.
@@ -22,22 +22,22 @@ block_cipher = None
 binaries = collect_dynamic_libs("ctranslate2") + collect_dynamic_libs("sentencepiece")
 
 a = Analysis(
-    ["src/entohin/__main__.py"],
+    ["src/setu/__main__.py"],
     pathex=["src"],
     binaries=binaries,
     datas=[],
     hiddenimports=[
         "ctranslate2",
         "sentencepiece",
-        "entohin.gui",
-        "entohin.gui_dictionary",
-        "entohin.dictionary",
-        "entohin.textio",
-        "entohin.translator",
-        "entohin.model",
-        "entohin.config",
-        "entohin.placeholders",
-        "entohin.segmenter",
+        "setu.gui",
+        "setu.gui_dictionary",
+        "setu.dictionary",
+        "setu.textio",
+        "setu.translator",
+        "setu.model",
+        "setu.config",
+        "setu.placeholders",
+        "setu.segmenter",
     ],
     hookspath=[],
     hooksconfig={},
@@ -58,7 +58,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="EngToHinTranslator",
+    name="Setu",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -79,5 +79,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="EngToHinTranslator",
+    name="Setu",
 )

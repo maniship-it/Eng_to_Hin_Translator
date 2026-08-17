@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from entohin.translator import CTranslate2Backend, Options, Translator
+from setu.translator import CTranslate2Backend, Options, Translator
 
 pytestmark = pytest.mark.integration
 

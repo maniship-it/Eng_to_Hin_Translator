@@ -102,7 +102,7 @@ _PAREN_SUFFIX_RE = re.compile(r"\(\w+\)$")
 def download(url: str, destination: Path) -> Path:
     """Fetch ``url`` to ``destination`` with a progress indicator."""
     print("Downloading %s" % url)
-    request = Request(url, headers={"User-Agent": "EngToHinTranslator/1.0"})
+    request = Request(url, headers={"User-Agent": "Setu/1.0"})
     try:
         with urlopen(request, timeout=120) as response:
             total = int(response.headers.get("Content-Length") or 0)
@@ -670,7 +670,7 @@ def _verify(dest: Path) -> bool:
     """Open the finished database through the application's own reader."""
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
     try:
-        from entohin.dictionary import Dictionary
+        from setu.dictionary import Dictionary
     except ImportError as exc:
         print("Could not import the app to verify the database: %s" % exc)
         return True

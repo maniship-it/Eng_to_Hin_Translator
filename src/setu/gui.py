@@ -19,6 +19,7 @@ from typing import Optional
 from . import model as model_module
 from .config import Settings
 from .gui_dictionary import DictionaryPanel
+from .runtime import is_missing_msvc_runtime, msvc_runtime_message
 from .textio import read_text_file, write_text_file
 from .translator import (
     Report,
@@ -28,7 +29,9 @@ from .translator import (
 )
 from .version import __version__
 
-APP_NAME = "English → Hindi Translator"
+APP_NAME = "SETU"
+APP_TITLE = "SETU — English to Hindi Translator"
+APP_TAGLINE = "सेतु · अंग्रेज़ी से हिंदी अनुवादक"
 
 # Messages passed from the worker thread to the UI thread.
 MSG_MODEL_READY = "model_ready"
@@ -37,6 +40,70 @@ MSG_PROGRESS = "progress"
 MSG_DONE = "done"
 MSG_ERROR = "error"
 MSG_CANCELLED = "cancelled"
+
+
+QUICK_START = [
+    ("Translate some text",
+     "Type or paste English on the left, then press the blue Translate button "
+     "(or Ctrl+Enter). The Hindi appears on the right."),
+    ("Translate a whole file",
+     "File \u2192 Open text file loads a document. Blank lines, indentation and "
+     "numbered lists are kept exactly as they were."),
+    ("Save your work",
+     "File \u2192 Save translation writes a .txt file. Save side-by-side writes "
+     "English and Hindi in two columns, ready for Excel."),
+    ("Look up a word",
+     "Double-click any word in either pane, or open the Dictionary tab "
+     "(Ctrl+D). You get Hindi meanings, synonyms, antonyms and examples."),
+    ("Government terminology",
+     "Dictionary \u2192 Administrative glossary lists official administrative "
+     "terms with meanings and examples in both languages."),
+    ("If Hindi looks like boxes",
+     "Tools \u2192 Settings and pick a Devanagari font such as Nirmala UI."),
+]
+
+#: One-line hints rotated in the tip bar under the toolbar.
+TIPS = [
+    "Tip: double-click any word to look it up in the Dictionary.",
+    "Tip: press Ctrl+Enter to translate, Esc to cancel a long run.",
+    "Tip: File \u2192 Save side-by-side gives you English and Hindi in two columns.",
+    "Tip: Dictionary \u2192 Administrative glossary has official government terms.",
+    "Tip: everything runs on this PC \u2014 nothing is sent over the internet.",
+]
+
+
+class Tooltip:
+    """A small hover label, so every button explains itself."""
+
+    def __init__(self, widget: tk.Widget, text: str):
+        self.widget = widget
+        self.text = text
+        self.window: Optional[tk.Toplevel] = None
+        widget.bind("<Enter>", self._show, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _show(self, event=None) -> None:
+        if self.window is not None or not self.text:
+            return
+        try:
+            x = self.widget.winfo_rootx() + 12
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+        except tk.TclError:
+            return
+        self.window = tk.Toplevel(self.widget)
+        self.window.wm_overrideredirect(True)
+        self.window.wm_geometry("+%d+%d" % (x, y))
+        tk.Label(
+            self.window, text=self.text, justify=tk.LEFT, background="#2b2b34",
+            foreground="#ffffff", relief=tk.FLAT, borderwidth=0,
+            font=("Segoe UI", 9), padx=8, pady=4, wraplength=320,
+        ).pack()
+
+    def _hide(self, event=None) -> None:
+        if self.window is not None:
+            self.window.destroy()
+            self.window = None
 
 
 class TranslatorApp(tk.Tk):
@@ -53,14 +120,16 @@ class TranslatorApp(tk.Tk):
         self._sync_scroll = tk.BooleanVar(value=True)
         self._started_at = 0.0
 
-        self.title(APP_NAME)
-        self.geometry("1100x700")
+        self.title(APP_TITLE)
+        self.geometry("1150x740")
         self.minsize(760, 480)
         self._set_icon()
 
         self._init_style()
         self._build_menu()
+        self._build_header()
         self._build_toolbar()
+        self._build_tip_bar()
         self._build_panes()
         self._build_statusbar()
         self._bind_keys()
@@ -68,6 +137,7 @@ class TranslatorApp(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(50, self._drain_queue)
         self._load_model_async()
+        self.after(400, self._maybe_show_quick_start)
 
     # -- construction --------------------------------------------------
 
@@ -156,6 +226,9 @@ class TranslatorApp(tk.Tk):
         menubar.add_cascade(label="Tools", menu=tools_menu)
 
         help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Quick start", accelerator="F1",
+                              command=self.show_quick_start)
+        help_menu.add_separator()
         help_menu.add_command(label="Where is my model?", command=self.show_model_help)
         help_menu.add_command(label="About", command=self.show_about)
         menubar.add_cascade(label="Help", menu=help_menu)
@@ -166,6 +239,42 @@ class TranslatorApp(tk.Tk):
         if not hasattr(self, "_wrap_variable"):
             self._wrap_variable = tk.BooleanVar(value=self.settings.wrap_text)
         return self._wrap_variable
+
+    def _build_header(self) -> None:
+        """A slim title bar so the app says what it is at a glance."""
+        header = tk.Frame(self, background="#1f3a68")
+        header.pack(side=tk.TOP, fill=tk.X)
+
+        inner = tk.Frame(header, background="#1f3a68", padx=14, pady=8)
+        inner.pack(fill=tk.X)
+
+        tk.Label(inner, text="SETU", background="#1f3a68", foreground="#ffffff",
+                 font=("Segoe UI", 17, "bold")).pack(side=tk.LEFT)
+        tk.Label(inner, text=APP_TAGLINE, background="#1f3a68",
+                 foreground="#c5d5f0", font=(self.settings.hindi_font_family
+                                             or "Nirmala UI", 11)).pack(
+            side=tk.LEFT, padx=(12, 0))
+        tk.Label(inner, text="Works fully offline · कोई इंटरनेट आवश्यक नहीं",
+                 background="#1f3a68", foreground="#9fb6dd",
+                 font=("Segoe UI", 9)).pack(side=tk.RIGHT)
+
+    def _build_tip_bar(self) -> None:
+        bar = ttk.Frame(self, padding=(10, 0, 10, 4))
+        bar.pack(side=tk.TOP, fill=tk.X)
+        self.tip_label = ttk.Label(bar, text=TIPS[0], foreground="#5a5a68")
+        self.tip_label.pack(side=tk.LEFT)
+        self._tip_index = 0
+        self._tip_job: Optional[str] = None
+        self._rotate_tip()
+
+    def _rotate_tip(self) -> None:
+        """Cycle the hint line so users discover features over time."""
+        self._tip_index = (self._tip_index + 1) % len(TIPS)
+        try:
+            self.tip_label.configure(text=TIPS[self._tip_index])
+        except tk.TclError:
+            return
+        self._tip_job = self.after(15000, self._rotate_tip)
 
     def _build_toolbar(self) -> None:
         bar = ttk.Frame(self, padding=(8, 6))
@@ -186,16 +295,28 @@ class TranslatorApp(tk.Tk):
             side=tk.LEFT, fill=tk.Y, padx=10, pady=2
         )
 
-        ttk.Button(bar, text="Open file", command=self.open_file).pack(side=tk.LEFT)
-        ttk.Button(bar, text="Save translation", command=self.save_translation).pack(
-            side=tk.LEFT, padx=(6, 0)
-        )
-        ttk.Button(bar, text="Copy result", command=self.copy_output).pack(
-            side=tk.LEFT, padx=(6, 0)
-        )
-        ttk.Button(bar, text="Clear", command=self.clear_all).pack(
-            side=tk.LEFT, padx=(6, 0)
-        )
+        open_button = ttk.Button(bar, text="Open file", command=self.open_file)
+        open_button.pack(side=tk.LEFT)
+        save_button = ttk.Button(bar, text="Save translation",
+                                 command=self.save_translation)
+        save_button.pack(side=tk.LEFT, padx=(6, 0))
+        copy_button = ttk.Button(bar, text="Copy result", command=self.copy_output)
+        copy_button.pack(side=tk.LEFT, padx=(6, 0))
+        clear_button = ttk.Button(bar, text="Clear", command=self.clear_all)
+        clear_button.pack(side=tk.LEFT, padx=(6, 0))
+        dictionary_button = ttk.Button(bar, text="Dictionary",
+                                       command=self.show_dictionary)
+        dictionary_button.pack(side=tk.LEFT, padx=(6, 0))
+
+        Tooltip(self.translate_button,
+                "Translate the English text into Hindi.  Shortcut: Ctrl+Enter")
+        Tooltip(self.cancel_button, "Stop a translation that is still running.  Esc")
+        Tooltip(open_button, "Open an English text file.  Ctrl+O")
+        Tooltip(save_button, "Save the Hindi translation to a file.  Ctrl+S")
+        Tooltip(copy_button, "Copy the Hindi translation to the clipboard.")
+        Tooltip(clear_button, "Empty both panes and start again.")
+        Tooltip(dictionary_button,
+                "Word meanings, synonyms and the government glossary.  Ctrl+D")
 
         self.progress = ttk.Progressbar(bar, mode="determinate", length=180)
         self.progress.pack(side=tk.RIGHT)
@@ -363,6 +484,7 @@ class TranslatorApp(tk.Tk):
         self.bind("<Control-equal>", lambda e: self.adjust_font(1))
         self.bind("<Control-minus>", lambda e: self.adjust_font(-1))
         self.bind("<Escape>", lambda e: self.cancel())
+        self.bind("<F1>", lambda e: self.show_quick_start())
 
     # -- scrolling -----------------------------------------------------
 
@@ -616,6 +738,16 @@ class TranslatorApp(tk.Tk):
     def open_settings(self) -> None:
         SettingsDialog(self)
 
+    def show_quick_start(self) -> None:
+        """A friendly walkthrough, shown on first run and from Help."""
+        QuickStartDialog(self)
+
+    def _maybe_show_quick_start(self) -> None:
+        if not self.settings.shown_quick_start:
+            self.settings.shown_quick_start = True
+            self.settings.save()
+            self.show_quick_start()
+
     def show_model_help(self) -> None:
         searched = "\n".join(
             "    %s" % path
@@ -639,13 +771,14 @@ class TranslatorApp(tk.Tk):
         messagebox.showinfo(
             "About " + APP_NAME,
             "%s\nVersion %s\n\n"
-            "Offline neural machine translation, English to Hindi.\n"
+            "Offline neural machine translation, English to Hindi,\n"
+            "with a bilingual dictionary and government glossary.\n"
             "Runs entirely on this PC — no internet connection is used.\n\n"
             "Engine: CTranslate2 + SentencePiece\n"
             "Model: Argos Translate en→hi (CC0 / MIT components)\n"
             "Dictionary: WordNet 3.0, FreeDict eng-hin (GPL-2.0+),\n"
             "and this project's government administrative glossary"
-            % (APP_NAME, __version__),
+            % (APP_TITLE, __version__),
         )
 
     # -- queue / state -------------------------------------------------
@@ -680,11 +813,15 @@ class TranslatorApp(tk.Tk):
             self._set_busy(False, "Model not loaded.")
             self.translate_button.configure(state=tk.DISABLED)
             self.model_label.configure(text="Model: not loaded")
-            messagebox.showerror(
-                "Translation model not available",
-                "%s\n\nUse Tools → Choose model folder if it is stored elsewhere."
-                % exc,
-            )
+            if is_missing_msvc_runtime(exc):
+                messagebox.showerror("One component is missing",
+                                     msvc_runtime_message(exc))
+            else:
+                messagebox.showerror(
+                    "Translation model not available",
+                    "%s\n\nUse Tools → Choose model folder if it is stored "
+                    "elsewhere." % exc,
+                )
 
         elif kind == MSG_PROGRESS:
             _, done, total = message
@@ -777,10 +914,70 @@ class TranslatorApp(tk.Tk):
                 return
             self.cancel_event.set()
         self.settings.save()
+        if getattr(self, "_tip_job", None) is not None:
+            try:
+                self.after_cancel(self._tip_job)
+            except tk.TclError:
+                pass
         if self.translator is not None:
             self.translator.close()
         self.dictionary_panel.close()
         self.destroy()
+
+
+class QuickStartDialog(tk.Toplevel):
+    """Six short cards covering everything a new user needs."""
+
+    def __init__(self, app: "TranslatorApp"):
+        super().__init__(app)
+        self.app = app
+        self.title("Quick start — SETU")
+        self.transient(app)
+        self.resizable(False, False)
+        self.configure(background="#ffffff")
+
+        banner = tk.Frame(self, background="#1f3a68", padx=18, pady=12)
+        banner.pack(fill=tk.X)
+        tk.Label(banner, text="Welcome to SETU", background="#1f3a68",
+                 foreground="#ffffff", font=("Segoe UI", 15, "bold")).pack(anchor=tk.W)
+        tk.Label(banner,
+                 text="Offline English to Hindi translation and dictionary.",
+                 background="#1f3a68", foreground="#c5d5f0",
+                 font=("Segoe UI", 10)).pack(anchor=tk.W)
+
+        body = tk.Frame(self, background="#ffffff", padx=18, pady=14)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        for number, (title, text) in enumerate(QUICK_START, start=1):
+            row = tk.Frame(body, background="#ffffff")
+            row.pack(fill=tk.X, pady=(0, 10))
+            tk.Label(row, text=str(number), background="#1f6feb",
+                     foreground="#ffffff", font=("Segoe UI", 10, "bold"),
+                     width=3).pack(side=tk.LEFT, anchor=tk.N)
+            column = tk.Frame(row, background="#ffffff")
+            column.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(10, 0))
+            tk.Label(column, text=title, background="#ffffff",
+                     font=("Segoe UI", 10, "bold"), anchor=tk.W).pack(fill=tk.X)
+            tk.Label(column, text=text, background="#ffffff", justify=tk.LEFT,
+                     wraplength=430, anchor=tk.W,
+                     font=("Segoe UI", 9)).pack(fill=tk.X)
+
+        # Classic Tk widgets take a single number for padx/pady; only the
+        # geometry managers accept a (before, after) pair.
+        footer = tk.Frame(self, background="#ffffff")
+        footer.pack(fill=tk.X, padx=18, pady=(0, 16))
+        ttk.Button(footer, text="Start using SETU",
+                   command=self.destroy).pack(side=tk.RIGHT)
+        tk.Label(footer, text="Press F1 any time to see this again.",
+                 background="#ffffff", foreground="#777777",
+                 font=("Segoe UI", 9)).pack(side=tk.LEFT)
+
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.bind("<Return>", lambda e: self.destroy())
+        self.update_idletasks()
+        x = app.winfo_rootx() + (app.winfo_width() - self.winfo_width()) // 2
+        y = app.winfo_rooty() + 60
+        self.geometry("+%d+%d" % (max(x, 0), max(y, 0)))
 
 
 class SettingsDialog(tk.Toplevel):
