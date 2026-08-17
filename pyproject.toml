@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "setu"
+name = "anuvad"
 version = "1.0.0"
-description = "SETU — offline English to Hindi translator and dictionary"
+description = "Anuvad Plus — offline English to Hindi translator and dictionary"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -15,10 +15,10 @@ dependencies = [
 ]
 
 [project.scripts]
-setu = "setu.__main__:main"
+anuvad = "anuvad.__main__:main"
 
 [project.gui-scripts]
-setu-gui = "setu.gui:main"
+anuvad-gui = "anuvad.gui:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title SETU - English to Hindi Translator
+title Anuvad Plus - English to Hindi Translator
 cd /d "%~dp0"
 
 rem ---- find Python -----------------------------------------------------
@@ -19,7 +19,7 @@ if not defined PY_CMD (
     echo.
     echo   Python was not found on this PC.
     echo.
-    echo   SETU needs Python 3.13 ^(64-bit^). Install it from the
+    echo   Anuvad Plus needs Python 3.13 ^(64-bit^). Install it from the
     echo   python-3.13 installer on the USB stick, or from python.org.
     echo.
     echo   IMPORTANT: during setup, tick "Add python.exe to PATH".
@@ -29,5 +29,5 @@ if not defined PY_CMD (
 )
 
 rem ---- start the app ---------------------------------------------------
-start "" %PY_CMD% "%~dp0Setu.py"
+start "" %PY_CMD% "%~dp0AnuvadPlus.py"
 exit /b 0

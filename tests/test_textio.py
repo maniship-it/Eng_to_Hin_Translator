@@ -6,7 +6,7 @@ import codecs
 
 import pytest
 
-from setu import textio
+from anuvad import textio
 
 SAMPLE = "Hello there. This is a test.\nSecond line."
 

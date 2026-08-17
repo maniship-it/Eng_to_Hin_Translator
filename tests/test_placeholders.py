@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from setu import placeholders
+from anuvad import placeholders
 
 
 class TestProtect:

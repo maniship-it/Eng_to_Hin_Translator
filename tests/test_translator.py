@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from setu.translator import (
+from anuvad.translator import (
     Options,
     TranslationCancelled,
     Translator,

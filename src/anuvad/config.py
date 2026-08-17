@@ -27,6 +27,9 @@ class Settings:
     hindi_font_family: str = "Nirmala UI"
     wrap_text: bool = True
     shown_quick_start: bool = False
+    theme: str = "light"
+    speech_rate: int = 0
+    speech_voice: str = ""
     last_directory: str = ""
 
     @classmethod
@@ -74,7 +77,7 @@ class Settings:
             pass
 
     def to_options(self):
-        """Build translator :class:`~setu.translator.Options` from these."""
+        """Build translator :class:`~anuvad.translator.Options` from these."""
         from .translator import Options
 
         return Options(

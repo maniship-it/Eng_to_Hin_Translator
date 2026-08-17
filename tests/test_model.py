@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from setu import model as model_module
+from anuvad import model as model_module
 
 
 def _make_model_tree(root, spm_name="sentencepiece.model", nested=True):

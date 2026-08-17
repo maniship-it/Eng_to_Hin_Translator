@@ -17,3 +17,7 @@ dist/
 models/
 wheels/
 *.argosmodel
+
+# Fetched by the build script, not source.
+installer/vc_redist.x64.exe
+cmudict.dict

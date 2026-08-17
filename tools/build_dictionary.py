@@ -31,11 +31,15 @@ import tempfile
 import zipfile
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+from anuvad import hindi as hindi_module  # noqa: E402
+from anuvad import pronunciation as phonetics  # noqa: E402
+
 DEFAULT_DEST = PROJECT_ROOT / "models" / "dictionary" / "dictionary.sqlite"
 DEFAULT_ADMIN = PROJECT_ROOT / "data" / "admin_glossary.tsv"
 
@@ -47,11 +51,14 @@ FREEDICT_URL = (
     "https://raw.githubusercontent.com/freedict/fd-dictionaries/master/"
     "eng-hin/eng-hin.tei"
 )
+CMUDICT_URL = (
+    "https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict"
+)
 
 TEI_NS = "{http://www.tei-c.org/ns/1.0}"
 
 #: Schema version; the application refuses a database it does not understand.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SOURCE_ADMIN = "admin"
 SOURCE_FREEDICT = "freedict"
@@ -102,7 +109,7 @@ _PAREN_SUFFIX_RE = re.compile(r"\(\w+\)$")
 def download(url: str, destination: Path) -> Path:
     """Fetch ``url`` to ``destination`` with a progress indicator."""
     print("Downloading %s" % url)
-    request = Request(url, headers={"User-Agent": "Setu/1.0"})
+    request = Request(url, headers={"User-Agent": "AnuvadPlus/1.0"})
     try:
         with urlopen(request, timeout=120) as response:
             total = int(response.headers.get("Content-Length") or 0)
@@ -376,6 +383,18 @@ def load_freedict(path: Path) -> Dict[str, List[dict]]:
     return entries
 
 
+# ---------------------------------------------------------------- cmudict
+
+
+def load_cmudict(path: Path) -> Dict[str, str]:
+    """Read the CMU Pronouncing Dictionary into ``word -> ARPAbet``."""
+    print("Reading pronunciations from %s" % path)
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        table = phonetics.parse_cmudict(handle)
+    print("  %d pronunciations" % len(table))
+    return table
+
+
 # ------------------------------------------------------------------- admin
 
 
@@ -449,7 +468,16 @@ CREATE TABLE senses (
 CREATE TABLE hindi_terms (
     term       TEXT NOT NULL,
     term_lower TEXT NOT NULL,
+    term_norm  TEXT NOT NULL,          -- folded for matching, see anuvad.hindi
     entry_id   INTEGER NOT NULL REFERENCES entries(id)
+);
+
+CREATE TABLE pronunciations (
+    entry_id   INTEGER PRIMARY KEY REFERENCES entries(id),
+    arpabet    TEXT NOT NULL DEFAULT '',
+    ipa        TEXT NOT NULL DEFAULT '',
+    respelling TEXT NOT NULL DEFAULT '',
+    syllables  INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE lemma_exceptions (
@@ -462,6 +490,8 @@ INDEXES = """
 CREATE UNIQUE INDEX idx_entries_word_lower ON entries(word_lower);
 CREATE INDEX idx_senses_entry ON senses(entry_id, rank);
 CREATE INDEX idx_hindi_lower ON hindi_terms(term_lower);
+CREATE INDEX idx_hindi_norm ON hindi_terms(term_norm);
+CREATE INDEX idx_entries_length ON entries(word_lower, LENGTH(word_lower));
 CREATE INDEX idx_hindi_entry ON hindi_terms(entry_id);
 """
 
@@ -484,7 +514,8 @@ def _unique(values: Iterable[str]) -> List[str]:
 
 def build_database(dest: Path, wordnet: Dict[str, List[dict]],
                    exceptions: Dict[str, str], freedict: Dict[str, List[dict]],
-                   admin: List[dict]) -> None:
+                   admin: List[dict],
+                   cmudict: Optional[Dict[str, str]] = None) -> None:
     """Write every source into a single SQLite database."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
@@ -531,7 +562,13 @@ def build_database(dest: Path, wordnet: Dict[str, List[dict]],
             ))
             next_sense_id += 1
             for term in _unique(hindi):
-                hindi_rows.append((term, term.lower(), identifier))
+                cleaned_term = hindi_module.display(term)
+                hindi_rows.append((
+                    cleaned_term,
+                    cleaned_term.lower(),
+                    hindi_module.normalize(cleaned_term),
+                    identifier,
+                ))
 
         # Administrative terms come first so they lead the results.
         for row in admin:
@@ -567,9 +604,28 @@ def build_database(dest: Path, wordnet: Dict[str, List[dict]],
             sense_rows,
         )
         connection.executemany(
-            "INSERT INTO hindi_terms (term, term_lower, entry_id) VALUES (?,?,?)",
+            "INSERT INTO hindi_terms (term, term_lower, term_norm, entry_id)"
+            " VALUES (?,?,?,?)",
             hindi_rows,
         )
+
+        # Pronunciations, matched to head words by their lower-case spelling.
+        pronunciation_rows = []
+        if cmudict:
+            for word, identifier in entry_ids.items():
+                found = phonetics.lookup(word, cmudict)
+                if found is None:
+                    continue
+                _, spoken = found
+                pronunciation_rows.append((
+                    identifier, spoken.arpabet, spoken.ipa,
+                    spoken.respelling, spoken.syllable_count,
+                ))
+            connection.executemany(
+                "INSERT INTO pronunciations (entry_id, arpabet, ipa, respelling,"
+                " syllables) VALUES (?,?,?,?,?)",
+                pronunciation_rows,
+            )
         connection.executemany(
             "INSERT OR IGNORE INTO lemma_exceptions (form, base) VALUES (?,?)",
             list(exceptions.items()),
@@ -583,9 +639,12 @@ def build_database(dest: Path, wordnet: Dict[str, List[dict]],
             "senses": str(len(sense_rows)),
             "admin_terms": str(len(admin)),
             "hindi_terms": str(len(hindi_rows)),
+            "pronunciations": str(len(pronunciation_rows)),
             "sources": json.dumps([
                 {"name": "Princeton WordNet 3.0", "licence": "WordNet 3.0 licence"},
                 {"name": "FreeDict eng-hin", "licence": "GPL-2.0-or-later"},
+                {"name": "CMU Pronouncing Dictionary",
+                 "licence": "BSD-2-Clause"},
                 {"name": "Administrative glossary", "licence": "MIT (this project)"},
             ], ensure_ascii=False),
         }
@@ -600,8 +659,9 @@ def build_database(dest: Path, wordnet: Dict[str, List[dict]],
         connection.close()
 
     print("\nWrote %s (%.1f MB)" % (dest, dest.stat().st_size / 1048576))
-    print("  %d head words, %d senses (%d administrative)"
-          % (len(entry_rows), len(sense_rows), len(admin)))
+    print("  %d head words, %d senses (%d administrative), %d pronunciations"
+          % (len(entry_rows), len(sense_rows), len(admin),
+             len(pronunciation_rows)))
 
 
 # -------------------------------------------------------------------- main
@@ -621,6 +681,10 @@ def main(argv=None) -> int:
                         help="Build without WordNet (no definitions or thesaurus).")
     parser.add_argument("--skip-freedict", action="store_true",
                         help="Build without FreeDict (no general Hindi meanings).")
+    parser.add_argument("--cmudict", default="",
+                        help="Local cmudict.dict file for pronunciations.")
+    parser.add_argument("--skip-pronunciation", action="store_true",
+                        help="Build without pronunciations.")
     args = parser.parse_args(argv)
 
     dest = Path(args.dest).expanduser().resolve()
@@ -646,12 +710,18 @@ def main(argv=None) -> int:
                 FREEDICT_URL, temporary / "eng-hin.tei")
             freedict = load_freedict(source)
 
+        cmudict: Dict[str, str] = {}
+        if not args.skip_pronunciation:
+            source = Path(args.cmudict) if args.cmudict else download(
+                CMUDICT_URL, temporary / "cmudict.dict")
+            cmudict = load_cmudict(source)
+
         admin = load_admin_glossary(Path(args.admin))
 
         if not (wordnet or freedict or admin):
             raise SystemExit("Nothing to build: every source was empty or skipped.")
 
-        build_database(dest, wordnet, exceptions, freedict, admin)
+        build_database(dest, wordnet, exceptions, freedict, admin, cmudict)
 
     return 0 if _verify(dest) else 1
 
@@ -670,7 +740,7 @@ def _verify(dest: Path) -> bool:
     """Open the finished database through the application's own reader."""
     sys.path.insert(0, str(PROJECT_ROOT / "src"))
     try:
-        from setu.dictionary import Dictionary
+        from anuvad.dictionary import Dictionary
     except ImportError as exc:
         print("Could not import the app to verify the database: %s" % exc)
         return True
@@ -683,11 +753,17 @@ def _verify(dest: Path) -> bool:
                 if entry is None:
                     print("  [warn] no entry for %r" % word)
                     continue
-                print("  %-12s %s | %s" % (
+                spoken = entry.pronunciation
+                print("  %-12s %s | %s%s" % (
                     word,
                     ", ".join(entry.parts_of_speech) or "-",
                     ", ".join(entry.hindi_meanings[:4]) or "-",
+                    "  /%s/" % spoken.ipa if spoken and spoken.ipa else "",
                 ))
+            for term in ("सरकार", "अधिसूचना"):
+                found = dictionary.reverse_lookup(term)
+                print("  %-12s -> %s" % (
+                    term, ", ".join(e.word for e in found[:4]) or "-"))
     except Exception as exc:
         print("  [FAIL] %s: %s" % (type(exc).__name__, exc))
         return False

@@ -1,30 +1,32 @@
-# SETU — English → Hindi Translator
+# Anuvad Plus — English ⇄ Hindi
 
-**सेतु** *(“bridge”)* — a desktop English-to-Hindi translator with a bilingual
-dictionary, running **completely offline** on a Windows PC. Neural machine
-translation, a Tkinter interface, and no network access ever.
+**अनुवाद प्लस** — an offline translator, bilingual dictionary and government
+terminology glossary for Windows. Neural machine translation, English
+pronunciation with audio, and no network access ever.
 
-Built for the case where the translating PC has no internet at all: prepare a
-bundle once on a connected machine, carry it across on a USB stick, and
-double-click one file. **Nothing is installed on the offline PC except Python
-itself** — no pip, no virtual environment, no administrator rights.
+Built for a PC with no internet: build one `.exe` installer on a connected
+machine, carry it across, double-click. **The offline PC needs nothing at all
+— not even Python.**
 
-> **Installing it?** The step-by-step guide is
-> **[INSTALLATION.md](INSTALLATION.md)**.
+> **Installing it?** → **[INSTALLATION.md](INSTALLATION.md)**
 
----
+| | |
+|---|---|
+| **Translate** | English → Hindi, whole documents, layout preserved |
+| **Dictionary** | ~150,000 words, both directions, English ⇄ हिंदी |
+| **Pronunciation** | IPA, plain respelling, syllables, and *Speak* aloud |
+| **Similar words** | "did you mean" for typos, plus clickable synonyms |
+| **Glossary** | 177 government administrative terms, bilingual |
+| **Offline** | no network code in the application at all |
 
 ## Contents
 
 - [How it works](#how-it-works)
-- [Quick start (offline Windows PC)](#quick-start-offline-windows-pc)
-- [Step 1 — build the bundle on an online PC](#step-1--build-the-bundle-on-an-online-pc)
-- [Step 2 — install on the offline PC](#step-2--install-on-the-offline-pc)
-- [Using the application](#using-the-application)
+- [Install it](#install-it)
+- [The translator](#the-translator)
 - [The dictionary](#the-dictionary)
-- [Command line](#command-line)
-- [Standalone .exe (no Python on the target PC)](#standalone-exe-no-python-on-the-target-pc)
 - [How correctness is protected](#how-correctness-is-protected)
+- [Command line](#command-line)
 - [Troubleshooting](#troubleshooting)
 - [Project layout](#project-layout)
 - [Development](#development)
@@ -37,130 +39,66 @@ itself** — no pip, no virtual environment, no administrator rights.
 | Piece | What it is | Size |
 |---|---|---|
 | Translation model | Argos Translate `en→hi`: a CTranslate2 transformer + SentencePiece vocabulary | ~100 MB |
-| Inference engine | [CTranslate2](https://github.com/OpenNMT/CTranslate2) — CPU-only, no PyTorch | ~40 MB wheel |
-| Tokenizer | [SentencePiece](https://github.com/google/sentencepiece) | ~1 MB wheel |
-| Dictionary | WordNet 3.0 + FreeDict eng-hin + a curated government glossary, compiled to SQLite | ~50 MB |
-| Interface | Tkinter (ships with Python) | — |
+| Inference engine | [CTranslate2](https://github.com/OpenNMT/CTranslate2) — CPU-only, no PyTorch | ~40 MB |
+| Dictionary | WordNet 3.0 + FreeDict eng-hin + CMU Pronouncing Dictionary + the government glossary, compiled to SQLite | ~56 MB |
+| Speech | the Windows speech engine, via PowerShell | — |
+| Interface | Tkinter, themed light and dark | — |
 
-There is no PyTorch, no `transformers`, and no server: the whole runtime is two
-wheels plus the model. Translation happens in-process on the CPU.
+There is no PyTorch, no `transformers`, and no server: the runtime is two
+compiled libraries plus data files. Translation happens in-process on the CPU.
 
-**Everything must be gathered once on a machine with internet.** The model and
-the Python wheels cannot be conjured on the offline PC. That is what
-`tools/make_offline_bundle.py` is for.
+**Everything is gathered once on a machine with internet.** The offline PC only
+ever receives finished files.
 
 ---
 
-## Quick start (offline Windows PC)
+## Install it
 
-If someone has already handed you the bundle folder:
+**On a Windows PC with internet**, once:
 
-1. Install **Python 3.13 (64-bit)**, ticking *“Add python.exe to PATH”* — only
-   if the PC does not already have it
-2. Copy the folder to the PC, e.g. `C:\SETU`
-3. Double-click **`Start SETU.bat`**
+```bat
+git clone https://github.com/maniship-it/Eng_to_Hin_Translator.git
+cd Eng_to_Hin_Translator
+scripts\Build Installer.bat
+```
 
-That is the whole installation. Nothing is downloaded and nothing is installed
-— the libraries travel unpacked in `lib/` and are loaded straight from there.
+That one script installs the build dependencies, downloads the model and the
+dictionary sources, compiles the database, draws the icon, freezes the app with
+PyInstaller and packages it with [Inno Setup](https://jrsoftware.org/isdl.php).
+It produces:
 
-Full details, including what to do when something goes wrong:
+```
+dist\AnuvadPlusSetup.exe    single-file installer, ~180 MB
+dist\AnuvadPlus\            the same thing as a portable folder
+```
+
+**On the offline PC**: copy `AnuvadPlusSetup.exe` across and double-click it.
+No Python, no dependencies, no administrator rights — the installer defaults to
+a per-user install. If the machine lacks Microsoft's C++ runtime, the installer
+silently supplies it from a copy inside itself.
+
+Prefer nothing installed at all? Copy the `dist\AnuvadPlus` folder and run
+`AnuvadPlus.exe` from inside it.
+
+Full walkthrough, including what to do when something goes wrong:
 **[INSTALLATION.md](INSTALLATION.md)**.
 
----
+### Without Inno Setup
 
-## Step 1 — build the bundle on an online PC
-
-On any machine with internet (Windows, Linux or macOS — the Windows wheels are
-downloaded cross-platform):
+If you skip Inno Setup you still get the portable folder. There is also a
+no-install bundle aimed at PCs that already have Python:
 
 ```bash
-git clone <this repository>
-cd Eng_to_Hin_Translator
-
-pip install -r requirements.txt
 python tools/make_offline_bundle.py --zip
 ```
 
-This produces `dist/Setu-Offline/` (and a `.zip`) containing:
-
-```
-lib/                every dependency, already unpacked — no pip needed
-models/en_hi/       the neural translation model
-models/dictionary/  the English-Hindi dictionary database
-src/  data/         the application and its glossary
-Start SETU.bat      double-click to run
-Check SETU.bat      diagnoses any problem in plain language
-vc_redist.x64.exe   Microsoft C++ runtime, used only if the PC lacks it
-INSTALL.txt
-```
-
-It targets **Python 3.13** by default; pass `--python-version 312` to match a
-different one. Copy the folder onto a USB stick, along with the Python
-installer from python.org.
-
-> **If the offline PC has no Python at all**, also put the Python installer
-> from [python.org/downloads/windows](https://www.python.org/downloads/windows/)
-> on the same USB stick. Pick the 64-bit installer matching the
-> `--python-version` you built for.
-
-Add `--skip-model` or `--skip-dictionary` to build only part of it.
-
-### Just the model
-
-If you only need the model (you already have the dependencies):
-
-```bash
-python tools/fetch_model.py
-```
-
-It downloads the Argos `translate-en_hi` package, normalises it into
-`models/en_hi/`, prints the SHA-256, and verifies it with a test translation.
-If your network blocks the download, fetch the `.argosmodel` file in a browser
-and point the script at it:
-
-```bash
-python tools/fetch_model.py --from-file translate-en_hi-1_1.argosmodel
-```
-
-### Just the dictionary
-
-```bash
-python tools/build_dictionary.py
-```
-
-It downloads WordNet and the FreeDict English-Hindi dictionary, merges them
-with `data/admin_glossary.tsv`, and writes `models/dictionary/dictionary.sqlite`
-(about 50 MB, roughly 150,000 head words). Already have the sources? Pass them
-in and nothing is downloaded:
-
-```bash
-python tools/build_dictionary.py --wordnet wordnet.zip --freedict eng-hin.tei
-```
+It unpacks every dependency into `lib/`, so `Start Anuvad Plus.bat` runs the app
+with only Python 3.13 present. Useful when you cannot copy an `.exe` onto the
+target machine.
 
 ---
 
-## Step 2 — install on the offline PC
-
-**Requirements:** Windows 10/11 64-bit, and 64-bit Python 3.13 installed with
-*"Add python.exe to PATH"* and *"tcl/tk and IDLE"* both ticked. That is the
-complete dependency list.
-
-Copy the folder across and double-click **`Start SETU.bat`**. There is no
-install step: the launcher puts `lib/` and `src/` on the import path and starts
-the app.
-
-**`Check SETU.bat`** verifies everything and names the fix for anything that is
-wrong.
-
-One caveat worth knowing: CTranslate2 links against Microsoft's C++ runtime
-(`MSVCP140.dll`, `VCRUNTIME140_1.dll`), which the Python installer does *not*
-provide. Nearly every Windows PC already has it. If this one does not, SETU
-says so plainly and points at the bundled `vc_redist.x64.exe` — one
-double-click, no internet needed.
-
----
-
-## Using the application
+## The translator
 
 The window is split into an English pane (left) and a Hindi pane (right).
 
@@ -184,38 +122,72 @@ bullet or numbered list markers are kept, and lines that contain no letters
 thread with a live sentence counter, so a long document neither freezes the
 window nor blocks cancellation.
 
-Settings live in `%LOCALAPPDATA%\Setu\settings.json`.
+Settings live in `%LOCALAPPDATA%\AnuvadPlus\settings.json`.
 
 ---
 
 ## The dictionary
 
-A second tab, entirely offline, backed by a local SQLite database of about
-150,000 head words. Press **Ctrl+D**, or double-click any word in the
-translation panes to look it up.
+Press **Ctrl+D**, or double-click any word in either translation pane. Backed by
+a local SQLite database of about 150,000 head words — no network, 3–8 ms per
+lookup.
 
-For a word it gives:
+### Both directions
 
-- **Hindi meanings** — all of them, most authoritative first
-- **Part of speech** — labelled in both languages (`noun / संज्ञा`)
-- **Definitions** — English for every sense; Hindi as well for administrative terms
+Type `sanction` or type `मंज़ूरी`. Anuvad Plus detects the script and searches
+that way; the label above the box shows which direction is live. Autocomplete
+follows suit, offering Devanagari words when you type Devanagari.
+
+Hindi spelling variants are folded together for matching, so `मंज़ूरी` and
+`मंजूरी` reach the same entry, as do chandrabindu/anusvara variants and text
+carrying invisible zero-width joiners. What is *displayed* is always the
+original spelling.
+
+### Pronunciation
+
+English entries carry, from the CMU Pronouncing Dictionary:
+
+| | |
+|---|---|
+| IPA | `/ˈɡʌ.vɚ.mənt/` |
+| Respelling | `GUH-vur-muhnt` |
+| Syllables | `3` |
+| **🔊 Speak** | says the word using the voice built into Windows |
+
+Speech goes through the Windows speech engine via PowerShell, so it needs
+nothing installed. Off Windows, the written forms still work and the app says
+why the audio does not.
+
+ARPAbet carries no syllable boundaries, so they are derived with a
+maximal-onset syllabifier before the IPA and respelling are rendered.
+
+### Similar words
+
+- **Did you mean** — misspell something and the closest head words appear as
+  clickable chips: `governmnet` → *government, governmental, governance*.
+  Candidates come from a few cheap prefix buckets rather than the whole
+  dictionary, so a failed lookup still answers in tens of milliseconds.
+- **Related** — every entry offers its synonyms and antonyms as chips; click one
+  to jump straight to it.
+
+### For a word it gives
+
+- **Hindi meanings**, most authoritative first
+- **Part of speech**, labelled in both languages (`noun / संज्ञा`)
+- **Definitions** — English for every sense; Hindi as well for government terms
 - **Thesaurus** — synonyms (पर्यायवाची) and antonyms (विलोम)
 - **Examples** — real sentences showing the word in use
 
-It searches in **both directions**: type `sanction` or type `मंज़ूरी`. Inflected
-forms resolve to their base word, so `running`, `ran`, `mice`, `studies` and
-`happiest` all find the right entry — irregular forms come from WordNet's own
-exception lists rather than guesswork.
+Inflected forms resolve to their base word, so `running`, `ran`, `mice`,
+`studies` and `happiest` all find the right entry — irregular forms come from
+WordNet's own exception lists rather than guesswork.
 
 ### Government administrative terminology
 
 `data/admin_glossary.tsv` is a curated glossary of **177 central government
-administrative terms**, written for this project. Every term carries the
-English and Hindi headword, a definition in **both** languages, and an example
-sentence in **both** languages.
-
-Browse it from **Dictionary → Administrative glossary**, filtered by any of the
-15 categories:
+administrative terms**, written for this project. Every term carries the English
+and Hindi headword, a definition in **both** languages, and an example sentence
+in **both** languages, across 15 categories:
 
 | | | |
 |---|---|---|
@@ -225,23 +197,11 @@ Browse it from **Dictionary → Administrative glossary**, filtered by any of th
 | vigilance and discipline | right to information | grievances |
 | official language | classification | general administration |
 
-A worked example — `Joint Secretary`:
-
-```
-Hindi   : संयुक्त सचिव
-[Government administrative term — designation]
-  Meaning : A senior officer heading a wing of a Ministry, below the
-            Additional Secretary.
-  अर्थ    : मंत्रालय के किसी स्कंध का प्रमुख वरिष्ठ अधिकारी, जो अपर सचिव से नीचे होता है।
-  Example : The proposal requires the approval of the Joint Secretary.
-  उदाहरण  : प्रस्ताव के लिए संयुक्त सचिव का अनुमोदन अपेक्षित है।
-```
-
 Administrative senses always sort above general ones, so `sanction` leads with
 the government meaning (मंजूरी, स्वीकृति) rather than the everyday one.
 
-The dictionary is **optional**: if the database is missing, the Dictionary tab
-says so and the translator carries on working.
+The dictionary is **optional**: if the database is missing, its page says so and
+the translator carries on working.
 
 ---
 
@@ -251,43 +211,28 @@ The same engine without the GUI:
 
 ```bat
 rem verify the installation and print a test translation
-.venv\Scripts\python.exe -m setu --check
+.venv\Scripts\python.exe -m anuvad --check
 
 rem translate a file
-.venv\Scripts\python.exe -m setu --file input.txt --out hindi.txt
+.venv\Scripts\python.exe -m anuvad --file input.txt --out hindi.txt
 
 rem to standard output, with a bigger beam for slightly better output
-.venv\Scripts\python.exe -m setu --file input.txt --beam-size 6
+.venv\Scripts\python.exe -m anuvad --file input.txt --beam-size 6
 
 rem dictionary lookup, in either language
-.venv\Scripts\python.exe -m setu --define sanction
-.venv\Scripts\python.exe -m setu --define अधिसूचना
+AnuvadPlus.exe --define sanction
+AnuvadPlus.exe --define अधिसूचना
 
-rem print the whole administrative glossary
-.venv\Scripts\python.exe -m setu --admin-glossary
+rem look it up and say it aloud
+AnuvadPlus.exe --define government --speak
+
+rem print the whole government glossary
+AnuvadPlus.exe --admin-glossary
 ```
 
-`--model-dir` overrides where the model is found, as does the `SETU_MODEL_DIR`
-environment variable. `--dictionary` and `SETU_DICTIONARY` do the same for
+`--model-dir` overrides where the model is found, as does the `ANUVAD_MODEL_DIR`
+environment variable. `--dictionary` and `ANUVAD_DICTIONARY` do the same for
 the dictionary database.
-
----
-
-## Standalone .exe (no Python on the target PC)
-
-If you would rather not install Python on the offline machine, build a frozen
-application on an **online Windows** PC:
-
-```bat
-scripts\build_windows_exe.bat
-```
-
-This produces `dist\Setu\` containing `Setu.exe`,
-its dependencies and the model. Copy that whole folder to the offline PC and
-double-click the `.exe` — there is nothing to install.
-
-PyInstaller can only build a Windows executable *on* Windows, so this step
-cannot be done from Linux or macOS.
 
 ---
 
@@ -348,47 +293,58 @@ important output reviewed by a Hindi speaker.**
 
 | Symptom | Fix |
 |---|---|
-| `Python was not found` | Install 64-bit Python from python.org with *"Add python.exe to PATH"* ticked. |
-| `No module named tkinter` | Re-run the Python installer and enable *"tcl/tk and IDLE"*. |
-| `DLL load failed` / "One component is missing" | Double-click `vc_redist.x64.exe` in the SETU folder. |
-| `No matching distribution found` | The wheels target a different Python version — see `bundle-info.txt`, and rebuild with `--python-version` to match. |
-| `No translation model found` | Copy `models\en_hi` next to the app, or use Tools → Choose model folder. |
+| "Windows protected your PC" on the installer | SmartScreen warns about any unsigned installer. **More info** → **Run anyway**. |
+| `DLL load failed` / "One component is missing" | The PC lacks Microsoft's C++ runtime. The installer supplies it automatically; with the portable folder, run `vc_redist.x64.exe` once. |
+| `No translation model found` | Copy `models\en_hi` next to `AnuvadPlus.exe`, or use Tools → Choose model folder. |
+| Dictionary page says "not available" | Copy `models\dictionary` across, or use Dictionary → Choose dictionary file. The translator is unaffected. |
 | Hindi shows as boxes `□□□` | Pick a Devanagari font in Tools → Settings. Windows ships with *Nirmala UI* and *Mangal*. |
-| `DLL load failed` importing ctranslate2 | Install the Microsoft Visual C++ Redistributable (x64). Download it on the online PC and carry it across. |
+| **Speak** does nothing | Speech goes through PowerShell. If policy blocks it, the written pronunciation still works; the status line explains. |
+| A word is not in the dictionary | Try its base form. ~150,000 head words, ~36,000 with a pronunciation — every common word, but not every rare one. |
 | Saved file shows garbage in Notepad | Files are saved UTF-8 with a BOM. If you re-save, keep the encoding as UTF-8. |
-| Translation is slow | Tools → Settings: lower the beam size to 1–2, raise the batch size, set CPU threads to your core count. |
-| Lines came back in English | Those failed the safety checks; the warning dialog lists them. Try rephrasing shorter sentences. |
-| Dictionary tab says "not available" | The `models\dictionary` folder is missing. Copy it across, or use Dictionary → Choose dictionary file. The translator is unaffected. |
-| A word is not in the dictionary | Try its base form. Coverage is ~150,000 head words, but not every inflection or proper noun is present. |
+| Translation is slow | Tools → Settings: beam size 1–2, batch size 32, CPU threads = core count. |
+| Lines came back in English | Those failed the safety checks; the warning dialog lists them. Try shorter sentences. |
+| `Python was not found` (building) | Only the *build* PC needs Python. Install 3.13 with *"Add python.exe to PATH"* ticked. |
 
-Run **`Check SETU.bat`** to get a full diagnostic report.
+Run `AnuvadPlus.exe --check` for a full diagnostic report.
 
 ---
 
 ## Project layout
 
 ```
-src/setu/
-    __main__.py      CLI entry point and --check diagnostics
-    gui.py           Tkinter interface
-    translator.py    engine: batching, caching, verification, fallbacks
-    segmenter.py     sentence splitting and layout preservation
-    placeholders.py  protecting URLs, paths and code from the model
-    model.py         locating and loading the model
-    dictionary.py    dictionary lookup, lemmatisation, reverse search
-    gui_dictionary.py the dictionary tab
-    textio.py        encoding detection for reading and writing text files
-    config.py        persisted user settings
+src/anuvad/
+    __main__.py       command line: translate, define, glossary, --check
+    gui.py            the window: navigation rail, pages, dialogs
+    gui_dictionary.py the dictionary page
+    theme.py          the design system: palettes, fonts, widget styles
+    translator.py     engine: batching, caching, verification, fallbacks
+    segmenter.py      sentence splitting and layout preservation
+    placeholders.py   protecting URLs, paths and code from the model
+    dictionary.py     lookup, lemmatisation, both directions, fuzzy matching
+    pronunciation.py  ARPAbet → IPA, respelling, syllables
+    hindi.py          Devanagari folding so spelling variants match
+    speech.py         the Windows speech bridge
+    model.py          locating and loading the model
+    textio.py         encoding detection for reading and writing text
+    config.py         persisted user settings
+    runtime.py        dependency checks and the C++ runtime message
 data/
-    admin_glossary.tsv  177 curated government administrative terms
+    admin_glossary.tsv   177 curated government administrative terms
 tools/
     fetch_model.py         download and install the model
     build_dictionary.py    compile the dictionary database
-    make_offline_bundle.py build the offline installation folder
+    make_icon.py           draw the application icon
+    make_offline_bundle.py build the no-install bundle
     make_test_model.py     build a tiny random model for the test suite
+installer/
+    anuvad_plus.iss   Inno Setup script → AnuvadPlusSetup.exe
+    anuvad.ico        generated icon
 scripts/
-    Start SETU.bat  Check SETU.bat  Setu.py  build_windows_exe.bat
-tests/           301 tests
+    Build Installer.bat   one command: model → dictionary → exe → installer
+    Start Anuvad Plus.bat  Check Anuvad Plus.bat  AnuvadPlus.py
+    frozen_entry.py        PyInstaller entry point
+anuvad_plus.spec      PyInstaller recipe
+tests/                415 tests
 ```
 
 ## Development
@@ -405,6 +361,10 @@ structurally valid CTranslate2 model with random weights, so the whole pipeline
 is exercised end to end. Because that model cannot produce Devanagari, it also
 serves as a live check that the safety guards reject bad output.
 
+The GUI tests drive the real window headlessly; on Linux run them under
+`xvfb-run`. `pytest -m "not integration"` skips everything that loads a model or
+opens a window.
+
 ## Licences
 
 This application is MIT licensed (see `LICENSE`), and so is the administrative
@@ -417,9 +377,11 @@ included in this repository:
 |---|---|---|
 | Translation model | Argos Translate `translate-en_hi` | CC0 / MIT components |
 | Definitions, thesaurus, examples | Princeton WordNet 3.0 | WordNet 3.0 licence (BSD-like) |
+| Pronunciations | CMU Pronouncing Dictionary | BSD-2-Clause |
 | English-Hindi meanings | FreeDict `eng-hin`, from the IIIT Hyderabad dictionary | **GPL-2.0-or-later** |
 | Inference engine | CTranslate2 | MIT |
 | Tokenizer | SentencePiece | Apache 2.0 |
+| Installer | Inno Setup (build tool only) | Inno Setup licence |
 
 Note the **GPL-2.0-or-later** on the FreeDict data. Using it yourself is
 unrestricted. If you redistribute the built `dictionary.sqlite` to others,

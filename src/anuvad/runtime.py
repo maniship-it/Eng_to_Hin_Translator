@@ -1,4 +1,4 @@
-"""Checks for the things SETU needs from the machine it runs on.
+"""Checks for the things Anuvad Plus needs from the machine it runs on.
 
 The one dependency that is not carried in the bundle is Microsoft's C++
 runtime.  CTranslate2 links against ``MSVCP140.dll`` and
@@ -97,7 +97,7 @@ def msvc_runtime_message(exc: Optional[BaseException] = None) -> str:
             "",
             "    1. Open this folder:  %s" % installer.parent,
             "    2. Double-click       %s" % installer.name,
-            "    3. Accept the prompt, then start SETU again.",
+            "    3. Accept the prompt, then start Anuvad Plus again.",
             "",
             "No internet connection is needed — the installer is already here.",
         ]
@@ -107,7 +107,7 @@ def msvc_runtime_message(exc: Optional[BaseException] = None) -> str:
             "    1. On a PC with internet, download:",
             "         %s" % VC_REDIST_URL,
             "    2. Copy that file to this PC and run it.",
-            "    3. Start SETU again.",
+            "    3. Start Anuvad Plus again.",
             "",
             "It is a free, standard Microsoft component. If you rebuild the "
             "offline bundle it will be included automatically.",
@@ -155,7 +155,7 @@ def check_dependencies() -> List[CheckResult]:
                 results.append(CheckResult(
                     name, False, detail=str(exc),
                     remedy="The lib folder is missing or incomplete. Re-copy "
-                           "the SETU folder from the USB stick.",
+                           "the Anuvad Plus folder from the USB stick.",
                 ))
 
     return results

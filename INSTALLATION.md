@@ -1,230 +1,243 @@
-# SETU — Installation Guide
+# Anuvad Plus — Installation Guide
 
-**SETU** (सेतु, "bridge") is an offline English → Hindi translator with a
-bilingual dictionary and a government administrative glossary. It runs entirely
-on your PC and never uses the internet.
+**Anuvad Plus** (अनुवाद प्लस) is an offline English ⇄ Hindi translator with a
+bilingual dictionary, English pronunciation, and a government administrative
+glossary. It runs entirely on your PC and never uses the internet.
 
-This guide has two halves:
+There are two halves:
 
-- **[Part A](#part-a--prepare-the-usb-stick)** — done once, on a PC **with**
-  internet. Produces a folder you copy to a USB stick.
-- **[Part B](#part-b--install-on-the-offline-pc)** — done on the **offline** PC.
-  Copy the folder, double-click one file. Nothing is installed.
-
-The only thing the offline PC needs is **Python 3.13 (64-bit)**.
+- **[Part A](#part-a--build-the-installer)** — done **once**, on a Windows PC
+  **with** internet. Produces a single `AnuvadPlusSetup.exe`.
+- **[Part B](#part-b--install-on-the-offline-pc)** — run that one file on the
+  offline PC. Nothing else is needed there. **Not even Python.**
 
 ---
 
-## Part A — prepare the USB stick
+## Part A — build the installer
 
-Do this on any computer with an internet connection. Windows, macOS or Linux
-all work — the Windows files are downloaded correctly from any of them.
+Do this on a Windows PC with an internet connection.
 
-### A1. Get the project
+### A1. Install the two build tools
 
-```bash
+| Tool | Where | Why |
+|---|---|---|
+| **Python 3.13 (64-bit)** | [python.org/downloads/windows](https://www.python.org/downloads/windows/) | to build the application. Tick **Add python.exe to PATH**. |
+| **Inno Setup 6** | [jrsoftware.org/isdl.php](https://jrsoftware.org/isdl.php) | to wrap it into a single installer. |
+
+Inno Setup is optional. Without it you still get a portable folder — see
+[Portable, no installer](#portable-no-installer) below.
+
+### A2. Get the project
+
+```bat
 git clone https://github.com/maniship-it/Eng_to_Hin_Translator.git
 cd Eng_to_Hin_Translator
 ```
 
-### A2. Build the bundle
+### A3. Run one script
 
-```bash
-pip install -r requirements.txt
-python tools/make_offline_bundle.py --zip
+Double-click **`scripts\Build Installer.bat`**, or run it from a prompt.
+
+It installs the build dependencies, downloads the translation model and the
+dictionary sources, compiles the dictionary, draws the icon, freezes the
+application with PyInstaller, fetches Microsoft's C++ runtime, and packages
+everything with Inno Setup.
+
+Expect **10–15 minutes** and about **400 MB** downloaded. The result:
+
+```
+dist\AnuvadPlusSetup.exe        the installer  (~180 MB)
+dist\AnuvadPlus\                the same thing as a portable folder
 ```
 
-This takes about five minutes and downloads roughly 250 MB. It produces
-`dist/Setu-Offline/` containing everything:
+### A4. Copy it across
 
-| Item | What it is |
-|---|---|
-| `lib/` | Every Python library SETU needs, already unpacked |
-| `models/en_hi/` | The neural translation model |
-| `models/dictionary/` | The dictionary database, ~150,000 words |
-| `src/`, `data/` | The application and the government glossary |
-| `Start SETU.bat` | Double-click this to run SETU |
-| `Check SETU.bat` | Reports any problem in plain language |
-| `vc_redist.x64.exe` | Microsoft C++ runtime, only used if the PC needs it |
-| `INSTALL.txt` | A short version of Part B, for whoever installs it |
-
-The default target is **Python 3.13**. If the offline PC has a different
-version, say so:
-
-```bash
-python tools/make_offline_bundle.py --python-version 312 --zip
-```
-
-### A3. Also download Python
-
-Get the **Windows installer (64-bit)** for Python 3.13 from
-[python.org/downloads/windows](https://www.python.org/downloads/windows/) and
-put it on the USB stick next to the SETU folder.
-
-Skip this only if you are certain the offline PC already has Python 3.13.
-
-### A4. Copy to the USB stick
-
-Copy the whole `Setu-Offline` folder (or its `.zip`) plus the Python installer.
-
-Expect the folder to be around **250–300 MB**.
+Put `AnuvadPlusSetup.exe` on a USB stick. That single file is everything.
 
 ---
 
 ## Part B — install on the offline PC
 
-### B1. Install Python — once, and only if it is missing
+1. Copy `AnuvadPlusSetup.exe` onto the PC.
+2. Double-click it.
+3. Click through the wizard. It offers a desktop shortcut.
+4. Anuvad Plus starts.
 
-To check whether it is already there: press the **Windows key**, type
-`python`, and see whether it appears.
+That is the whole installation. **No Python, no separate downloads, no
+internet, and no administrator rights** — the installer defaults to a per-user
+install under your own profile. If you want it available to everyone on the PC
+and you have admin rights, choose that option in the wizard.
 
-If not, run the Python installer from the USB stick. On the very first screen:
+If the PC happens to be missing Microsoft's C++ runtime, the installer spots
+that and installs it silently, from a copy inside itself. You will not be asked
+anything.
 
-> ☑ **Add python.exe to PATH** ← **tick this box**
+### Portable, no installer
 
-Then click **Install Now**. Keep **tcl/tk and IDLE** ticked if you are offered
-the choice — that provides the window toolkit SETU draws with.
+If you would rather not install anything at all, copy the whole
+`dist\AnuvadPlus` folder to the PC and run `AnuvadPlus.exe` from inside it. It
+is fully self-contained. To remove it, delete the folder.
 
-This is the only thing that gets installed on the PC.
+---
 
-### B2. Copy the SETU folder
+## Using Anuvad Plus
 
-Copy the `Setu-Offline` folder from the USB stick to the PC — for example to
-`C:\SETU`. Keep the folder together; everything SETU needs is inside it.
+Press **F1** inside the app at any time for the quick start.
 
-### B3. Start it
+### Translating
 
-Double-click **`Start SETU.bat`**.
+| I want to… | Do this |
+|---|---|
+| Translate some text | Type on the left, press **Translate** or **Ctrl+Enter** |
+| Translate a whole file | **File → Open text file**, then Translate |
+| Save the Hindi | **File → Save translation** (**Ctrl+S**) |
+| Get both languages side by side | **File → Save side-by-side** — opens in Excel |
+| Stop a long translation | **Esc** |
 
-That is the entire installation. The window opens in a few seconds.
+Blank lines, indentation, bullets and numbering are preserved, so a formatted
+document comes back with the same shape. Where Anuvad Plus is unsure of a
+translation it **keeps the English** and tells you which lines those were,
+rather than showing you something it cannot vouch for.
 
-To make it easier to find later, right-click `Start SETU.bat` →
-**Send to** → **Desktop (create shortcut)**, then rename the shortcut to SETU.
+### The dictionary
+
+Press **Ctrl+D**, or double-click any word in either pane.
+
+- **Both directions.** Type `sanction` or type `मंज़ूरी` — it notices which
+  script you are using and searches that way. The label above the box shows
+  which direction is active.
+- **Pronunciation.** English words show IPA (`/ˈɡʌ.vɚ.mənt/`), a plain
+  respelling (`GUH-vur-muhnt`) and the syllable count. Press **🔊 Speak** to
+  hear it, using the voice built into Windows.
+- **Similar words.** Misspell something and it offers the closest matches —
+  type `governmnet` and it suggests *government*. Click any suggestion to jump
+  to it.
+- **Related words.** Every entry shows clickable synonyms and antonyms.
+- **Spelling variants are handled.** `मंज़ूरी` and `मंजूरी` find the same entry,
+  as do words written with a chandrabindu instead of an anusvara.
+
+### The government glossary
+
+The **Glossary** in the navigation rail lists 177 central government
+administrative terms across 15 categories — designations, noting and drafting,
+service matters, finance, procurement, legislative, official language and more.
+Each carries the English and Hindi headword, a definition in **both** languages,
+and an example sentence in **both**.
+
+### Appearance
+
+**Ctrl+T** switches between the light and dark themes. **Ctrl +** and
+**Ctrl −** change the text size. Both are remembered.
 
 ---
 
 ## Checking the installation
 
-Double-click **`Check SETU.bat`**. It prints a report:
+Inside the app: **Help → About** shows the version, and the status bar names the
+model and dictionary in use.
+
+From a command prompt, in the installation folder:
+
+```bat
+AnuvadPlus.exe --check
+```
 
 ```
   [ok]   Python 3.13.1
   [ok]   tkinter (window toolkit) available
   [ok]   ctranslate2 4.8.1
   [ok]   sentencepiece 0.2.2
-  [ok]   model: C:\SETU\models\en_hi
+  [ok]   model: C:\...\Anuvad Plus\models\en_hi
   [ok]   test translation: यह एक परीक्षण है।
-  [ok]   dictionary: C:\SETU\models\dictionary\dictionary.sqlite
+  [ok]   dictionary: C:\...\Anuvad Plus\models\dictionary\dictionary.sqlite
          150052 head words, 177 administrative terms
 
 All checks passed.
 ```
 
-Anything that is wrong is listed with the exact fix underneath it.
+The command line can also do the work directly:
+
+```bat
+AnuvadPlus.exe --file input.txt --out hindi.txt
+AnuvadPlus.exe --define sanction
+AnuvadPlus.exe --define अधिसूचना
+AnuvadPlus.exe --define government --speak
+AnuvadPlus.exe --admin-glossary
+```
 
 ---
 
 ## If something goes wrong
 
-### "Python was not found"
+### "Windows protected your PC" when running the installer
 
-Python is not installed, or **Add python.exe to PATH** was not ticked during
-setup. Re-run the Python installer, choose **Modify**, and make sure that box
-is ticked. Then try again.
+Windows SmartScreen shows this for any installer that is not code-signed, which
+includes this one. Click **More info** → **Run anyway**. Signing requires a paid
+certificate; if your organisation has one, sign `AnuvadPlusSetup.exe` with it
+and the warning disappears.
 
-### "One component is missing" or "DLL load failed"
+### "DLL load failed" or "One component is missing"
 
-The PC does not have Microsoft's C++ runtime, which the translation engine
-needs. Python does not include it.
-
-**Fix:** double-click `vc_redist.x64.exe` in the SETU folder, accept the
-prompt, and start SETU again. It takes about a minute and needs no internet.
-
-Most Windows PCs already have this runtime because many programs install it, so
-you will probably never see this message.
-
-### "No module named tkinter"
-
-Python was installed without the window toolkit. Re-run the Python installer,
-choose **Modify**, and tick **tcl/tk and IDLE**.
+The PC is missing Microsoft's C++ runtime. The installer normally handles this
+by itself. If you used the portable folder instead, run `vc_redist.x64.exe` from
+[aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+once — the app tells you this in plain words when it happens.
 
 ### Hindi shows as boxes □□□
 
-The font in use has no Devanagari characters. Go to **Tools → Settings** and
-choose **Nirmala UI** or **Mangal**. Both ship with Windows.
+**Tools → Settings**, and choose **Nirmala UI** or **Mangal**. Both come with
+Windows.
 
-### "No translation model found"
+### Speak does nothing
 
-The `models` folder did not get copied, or only part of it did. Copy it again
-from the USB stick into the SETU folder. You can also point SETU at it
-directly: **Tools → Choose model folder**.
+Speech uses the voice built into Windows, reached through PowerShell. If
+PowerShell is blocked by policy on that PC, the written pronunciation still
+works — only the audio is unavailable. The status line says so when you press
+Speak.
 
-### The Dictionary tab says it is not available
+### A word is not in the dictionary
 
-Only the dictionary is missing — translation still works. Copy
-`models\dictionary` across from the USB stick, or use
-**Dictionary → Choose dictionary file**.
+Try the base form. Coverage is about 150,000 head words, and roughly 36,000 of
+them carry a pronunciation — every common word does, but rare technical terms
+and proper nouns may not.
 
 ### Translation feels slow
 
-**Tools → Settings**: set **Beam size** to 1 or 2, raise **Sentences per
-batch** to 32, and set **CPU threads** to the number of cores in the PC.
-Quality drops very slightly; speed improves a lot.
+**Tools → Settings**: set **Beam size** to 1 or 2, raise **Sentences per batch**
+to 32, and set **CPU threads** to the number of cores. Quality drops very
+slightly; speed improves a lot.
 
 ---
 
-## Using SETU
+## Moving or removing it
 
-Press **F1** inside the app at any time for the quick start guide.
+**Move**: copy the folder, or run the installer again on the other PC.
 
-| I want to… | Do this |
-|---|---|
-| Translate some text | Type on the left, press **Translate** (or **Ctrl+Enter**) |
-| Translate a whole file | **File → Open text file**, then Translate |
-| Save the Hindi | **File → Save translation** (**Ctrl+S**) |
-| Get both languages side by side | **File → Save side-by-side** — opens in Excel |
-| Look up a word | Double-click it, or press **Ctrl+D** |
-| Find an official term | **Dictionary → Administrative glossary** |
-| Make the text bigger | **Ctrl +** and **Ctrl −** |
-| Stop a long translation | **Esc** |
-
-Blank lines, indentation, bullets and numbering are preserved, so a formatted
-document comes back with the same shape.
-
-Where SETU is unsure of a translation it **keeps the English** and tells you
-which lines those were, rather than showing you something it cannot vouch for.
-
----
-
-## Moving SETU to another PC
-
-Copy the whole SETU folder. Install Python 3.13 on the new PC if it is not
-there. That is all — there is nothing registered in Windows, no services, and
-nothing in the registry.
-
-To uninstall, delete the folder. Settings live in
-`%LOCALAPPDATA%\Setu\settings.json`; delete that too if you want no trace.
+**Remove**: use *Add or remove programs*, or the uninstaller in the Start Menu.
+Settings live in `%LOCALAPPDATA%\AnuvadPlus\settings.json` and are removed with
+it.
 
 ---
 
 ## Frequently asked
 
-**Does SETU send anything over the internet?**
-No. There is no network code in the application at all. The download tools are
-separate scripts you run in Part A.
+**Does it ever use the internet?**
+No. There is no network code in the application. Downloading happens only in
+Part A, on a different machine.
 
-**Does it need administrator rights?**
-Only the Python installer might. SETU itself runs as a normal user.
+**Does the offline PC need Python?**
+No. The `.exe` has its own Python inside it.
 
-**Can it run from the USB stick directly?**
-Yes, though it will be slower. Python still has to be installed on the PC.
+**How big is it?**
+The installer is around 180 MB; installed, about 400 MB. Most of that is the
+translation model and the dictionary.
 
-**How accurate is it?**
-Good for ordinary prose. Weaker on idiom, poetry and dense legal or technical
+**How accurate is the translation?**
+Good on ordinary prose; weaker on idiom, poetry, and dense legal or technical
 wording. Sentences are translated independently, so context does not carry
 across sentence boundaries. Have important output checked by a Hindi speaker.
 
-**Can I add my own terminology?**
-Yes. Edit `data/admin_glossary.tsv` (a tab-separated file — Excel opens it),
-then rebuild the dictionary on an internet-connected PC with
-`python tools/build_dictionary.py`.
+**Can we add our own terminology?**
+Yes. Edit `data\admin_glossary.tsv` — a tab-separated file Excel opens — then
+rebuild on a connected PC with `python tools\build_dictionary.py` and re-run the
+build script.

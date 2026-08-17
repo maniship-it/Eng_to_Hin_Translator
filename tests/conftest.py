@@ -13,7 +13,7 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from setu.translator import Backend, Options, Translator  # noqa: E402
+from anuvad.translator import Backend, Options, Translator  # noqa: E402
 
 PLACEHOLDER_RE = re.compile(r"^#\d+#$")
 
@@ -100,6 +100,17 @@ TEST_WORDNET = {
 
 TEST_EXCEPTIONS = {"ran": "run", "mice": "mouse", "ate": "eat"}
 
+#: A few real CMU Pronouncing Dictionary lines, for the pronunciation feature.
+TEST_CMUDICT = {
+    "government": "G AH1 V ER0 M AH0 N T",
+    "happy": "HH AE1 P IY0",
+    "run": "R AH1 N",
+    "study": "S T AH1 D IY0",
+    "mouse": "M AW1 S",
+    "walk": "W AO1 K",
+    "notification": "N OW2 T AH0 F AH0 K EY1 SH AH0 N",
+}
+
 #: A small stand-in for the FreeDict English-Hindi dictionary.
 TEST_FREEDICT = {
     "government": [{"pos": "noun", "hindi": ["सरकार"],
@@ -126,14 +137,15 @@ def dictionary_path(tmp_path_factory) -> Path:
     )
     destination = tmp_path_factory.mktemp("dictionary") / "dictionary.sqlite"
     build_dictionary.build_database(
-        destination, TEST_WORDNET, TEST_EXCEPTIONS, TEST_FREEDICT, admin
+        destination, TEST_WORDNET, TEST_EXCEPTIONS, TEST_FREEDICT, admin,
+        TEST_CMUDICT,
     )
     return destination
 
 
 @pytest.fixture
 def dictionary(dictionary_path):
-    from setu.dictionary import Dictionary
+    from anuvad.dictionary import Dictionary
 
     instance = Dictionary.open(dictionary_path)
     yield instance

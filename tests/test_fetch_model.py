@@ -47,7 +47,7 @@ class TestInstall:
         assert (destination / "metadata.json").is_file()
 
     def test_the_result_is_a_model_directory_the_app_accepts(self, tmp_path):
-        from setu import model as model_module
+        from anuvad import model as model_module
 
         archive = make_archive(tmp_path / "pkg.argosmodel")
         destination = tmp_path / "models" / "en_hi"

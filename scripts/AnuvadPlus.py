@@ -1,12 +1,12 @@
-"""SETU launcher — run the application straight from this folder.
+"""Anuvad Plus launcher — run the application straight from this folder.
 
 Nothing is installed. The bundle carries its libraries in ``lib`` and the
 application in ``src``; this script puts both on the import path and starts
-SETU. It only needs Python itself.
+Anuvad Plus. It only needs Python itself.
 
-    python Setu.py            start the window
-    python Setu.py --check    check the installation
-    python Setu.py --help     every command line option
+    python AnuvadPlus.py            start the window
+    python AnuvadPlus.py --check    check the installation
+    python AnuvadPlus.py --help     every command line option
 """
 
 from __future__ import annotations
@@ -57,12 +57,12 @@ def main() -> int:
     _prepare_path()
 
     try:
-        from setu.__main__ import main as app_main
+        from anuvad.__main__ import main as app_main
     except ImportError as exc:
         _report(
-            "SETU cannot start",
+            "Anuvad Plus cannot start",
             "The application files could not be loaded.\n\n"
-            "Make sure the whole SETU folder was copied, including the 'src' "
+            "Make sure the whole Anuvad Plus folder was copied, including the 'src' "
             "and 'lib' folders.\n\nTechnical detail: %s" % exc,
         )
         return 2
@@ -71,14 +71,14 @@ def main() -> int:
         return app_main()
     except ImportError as exc:
         try:
-            from setu.runtime import is_missing_msvc_runtime, msvc_runtime_message
+            from anuvad.runtime import is_missing_msvc_runtime, msvc_runtime_message
         except ImportError:
-            _report("SETU cannot start", str(exc))
+            _report("Anuvad Plus cannot start", str(exc))
             return 2
         if is_missing_msvc_runtime(exc):
             _report("One component is missing", msvc_runtime_message(exc))
             return 3
-        _report("SETU cannot start", str(exc))
+        _report("Anuvad Plus cannot start", str(exc))
         return 2
 
 

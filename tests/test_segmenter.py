@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from setu import segmenter
+from anuvad import segmenter
 
 
 class TestSplitSentences:

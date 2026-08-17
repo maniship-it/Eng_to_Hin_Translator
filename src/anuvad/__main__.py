@@ -1,13 +1,13 @@
-"""Entry point: ``python -m setu`` starts the GUI, or works from the terminal.
+"""Entry point: ``python -m anuvad`` starts the GUI, or works from the terminal.
 
 Examples::
 
-    python -m setu                       # start the desktop app
-    python -m setu --file input.txt      # translate a file to stdout
-    python -m setu --file in.txt -o out.txt
-    python -m setu --define sanction     # look a word up
-    python -m setu --admin-glossary      # list the government glossary
-    python -m setu --check               # verify the installation
+    python -m anuvad                       # start the desktop app
+    python -m anuvad --file input.txt      # translate a file to stdout
+    python -m anuvad --file in.txt -o out.txt
+    python -m anuvad --define sanction     # look a word up
+    python -m anuvad --admin-glossary      # list the government glossary
+    python -m anuvad --check               # verify the installation
 """
 
 from __future__ import annotations
@@ -19,8 +19,8 @@ from pathlib import Path
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="setu",
-        description="SETU — offline English to Hindi translator and dictionary.",
+        prog="anuvad",
+        description="Anuvad Plus — offline English to Hindi translator and dictionary.",
     )
     parser.add_argument("--file", "-f", help="Translate this text file instead of "
                                              "starting the GUI.")
@@ -36,6 +36,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--admin-glossary", action="store_true",
                         help="List the government administrative glossary.")
     parser.add_argument("--dictionary", help="Path to the dictionary database.")
+    parser.add_argument("--speak", action="store_true",
+                        help="With --define, also say the word aloud (Windows).")
     parser.add_argument("--check", action="store_true",
                         help="Check that the model and dependencies are usable.")
     parser.add_argument("--version", action="store_true", help="Print the version.")
@@ -46,7 +48,7 @@ def _check(model_dir: str = "", dictionary_path: str = "") -> int:
     """Verify dependencies and the model, printing a readable report."""
     from .version import __version__
 
-    print("SETU — English to Hindi Translator %s" % __version__)
+    print("Anuvad Plus %s" % __version__)
     print("Python %s" % sys.version.split()[0])
 
     from .runtime import check_dependencies
@@ -125,6 +127,17 @@ def _print_entry(entry) -> None:
         print("(shown for %r)" % entry.matched_form)
     if entry.hindi_meanings:
         print("Hindi   : %s" % ", ".join(entry.hindi_meanings[:12]))
+    if entry.has_pronunciation:
+        spoken = entry.pronunciation
+        parts = []
+        if spoken.ipa:
+            parts.append("/%s/" % spoken.ipa)
+        if spoken.respelling:
+            parts.append(spoken.respelling)
+        if spoken.syllable_count:
+            parts.append("%d syllable%s" % (spoken.syllable_count,
+                                            "" if spoken.syllable_count == 1 else "s"))
+        print("Say it  : %s" % "   ".join(parts))
     if entry.parts_of_speech:
         print("Parts of speech: %s"
               % ", ".join(pos_label(p) for p in entry.parts_of_speech))
@@ -169,7 +182,7 @@ def _print_entry(entry) -> None:
         print("Antonyms: %s" % ", ".join(entry.antonyms[:25]))
 
 
-def _define(word: str, dictionary_path: str = "") -> int:
+def _define(word: str, dictionary_path: str = "", speak: bool = False) -> int:
     """Print the dictionary entry for ``word``."""
     from .dictionary import DictionaryError, DictionaryNotFoundError
 
@@ -183,14 +196,26 @@ def _define(word: str, dictionary_path: str = "") -> int:
         entries = dictionary.search(word)
         if not entries:
             print("Not found: %s" % word, file=sys.stderr)
-            suggestions = dictionary.suggest(word, limit=10)
-            if suggestions:
-                print("Did you mean: %s" % ", ".join(suggestions), file=sys.stderr)
+            similar = dictionary.similar_words(word, limit=8)
+            if similar:
+                print("Did you mean: %s" % ", ".join(similar), file=sys.stderr)
+            else:
+                suggestions = dictionary.suggest_either(word, limit=10)
+                if suggestions:
+                    print("Words starting that way: %s" % ", ".join(suggestions),
+                          file=sys.stderr)
             return 1
         for index, entry in enumerate(entries[:5]):
             if index:
                 print()
             _print_entry(entry)
+
+        if speak and entries:
+            from . import speech
+
+            result = speech.speak(entries[0].word)
+            if not result.ok:
+                print("\n%s" % result.message, file=sys.stderr)
     return 0
 
 
@@ -273,7 +298,7 @@ def main(argv=None) -> int:
         return _check(args.model_dir or "", args.dictionary or "")
 
     if args.define:
-        return _define(args.define, args.dictionary or "")
+        return _define(args.define, args.dictionary or "", speak=args.speak)
 
     if args.admin_glossary:
         return _list_admin_glossary(args.dictionary or "")
@@ -287,4 +312,15 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except BrokenPipeError:
+        # Output was piped into something that closed early, such as `head`.
+        # Exiting quietly is the expected behaviour, not an error.
+        try:
+            sys.stdout.close()
+        except Exception:
+            pass
+        sys.exit(0)
+    except KeyboardInterrupt:
+        sys.exit(130)

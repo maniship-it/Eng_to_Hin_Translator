@@ -3,13 +3,13 @@
 Run this ONCE on a machine with internet access (any OS -- the Windows wheels
 are downloaded cross-platform).  It produces::
 
-    dist/Setu-Offline/
+    dist/AnuvadPlus-Offline/
         lib/                  every dependency, already unpacked
         models/en_hi/         the neural translation model
         models/dictionary/    the English-Hindi dictionary database
         src/                  the application
-        Start SETU.bat        double-click to run -- no install step
-        Check SETU.bat        confirms everything is in place
+        Start Anuvad Plus.bat        double-click to run -- no install step
+        Check Anuvad Plus.bat        confirms everything is in place
         vc_redist.x64.exe     Microsoft C++ runtime, only if the PC lacks it
         INSTALL.txt README.md
 
@@ -36,10 +36,10 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from setu.runtime import VC_REDIST_FILENAME, VC_REDIST_URL  # noqa: E402
+from anuvad.runtime import VC_REDIST_FILENAME, VC_REDIST_URL  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = PROJECT_ROOT / "dist" / "Setu-Offline"
+DEFAULT_OUTPUT = PROJECT_ROOT / "dist" / "AnuvadPlus-Offline"
 
 #: Copied verbatim into the bundle.
 SOURCE_ITEMS = [
@@ -154,7 +154,7 @@ def fetch_vc_redist(destination: Path) -> bool:
     destination.parent.mkdir(parents=True, exist_ok=True)
     print("Downloading the Microsoft C++ runtime (%s) …" % VC_REDIST_URL)
     try:
-        request = Request(VC_REDIST_URL, headers={"User-Agent": "Setu/1.0"})
+        request = Request(VC_REDIST_URL, headers={"User-Agent": "AnuvadPlus/1.0"})
         with urlopen(request, timeout=120) as response:
             data = response.read()
         if len(data) < 1_000_000:
@@ -215,11 +215,11 @@ def copy_sources(output: Path) -> None:
 
 INSTALL_TXT = """\
 ==============================================================
-  SETU - English to Hindi Translator
+  Anuvad Plus - English to Hindi Translator
   Offline installation guide
 ==============================================================
 
-SETU runs entirely on this PC. It never uses the internet.
+Anuvad Plus runs entirely on this PC. It never uses the internet.
 
 
 WHAT YOU NEED
@@ -245,26 +245,26 @@ STEP 1 - INSTALL PYTHON (only once, only if it is missing)
 
 STEP 2 - COPY THE FOLDER
 ------------------------
-  Copy this whole SETU folder to the PC, for example to:
+  Copy this whole Anuvad Plus folder to the PC, for example to:
 
-      C:\\SETU
+      C:\\AnuvadPlus
 
   Keep the folder together. Everything it needs is inside it.
 
 
 STEP 3 - START IT
 -----------------
-  Double-click:   Start SETU.bat
+  Double-click:   Start Anuvad Plus.bat
 
   That is all. The window opens in a few seconds.
 
-  To put it on the desktop: right-click "Start SETU.bat",
+  To put it on the desktop: right-click "Start Anuvad Plus.bat",
   choose "Send to" then "Desktop (create shortcut)".
 
 
 IF SOMETHING IS WRONG
 ---------------------
-  Double-click "Check SETU.bat". It prints a report saying exactly
+  Double-click "Check Anuvad Plus.bat". It prints a report saying exactly
   what is missing and what to do about it.
 
 
@@ -275,7 +275,7 @@ IF SOMETHING IS WRONG
   "One component is missing" / "DLL load failed"
       This PC does not have the Microsoft C++ runtime. Double-click
       vc_redist.x64.exe in this folder, accept the prompt, then start
-      SETU again. It is a free Microsoft component and takes a minute.
+      Anuvad Plus again. It is a free Microsoft component and takes a minute.
       Most PCs already have it, so you will probably never see this.
 
   Hindi shows as boxes
@@ -284,10 +284,10 @@ IF SOMETHING IS WRONG
 
   "No translation model found"
       The models folder did not get copied. Copy it again from the
-      USB stick into the SETU folder.
+      USB stick into the Anuvad Plus folder.
 
 
-USING SETU
+USING Anuvad Plus
 ----------
   Translate      Type or paste English on the left, press the blue
                  Translate button (or Ctrl+Enter).
@@ -304,10 +304,10 @@ USING SETU
 
 WHAT IS IN THIS FOLDER
 ----------------------
-  Start SETU.bat        double-click this to run SETU
-  Check SETU.bat        checks the installation and reports problems
-  Setu.py               the launcher that Start SETU.bat calls
-  lib\\                 the libraries SETU needs, ready to use
+  Start Anuvad Plus.bat        double-click this to run Anuvad Plus
+  Check Anuvad Plus.bat        checks the installation and reports problems
+  AnuvadPlus.py               the launcher that Start Anuvad Plus.bat calls
+  lib\\                 the libraries Anuvad Plus needs, ready to use
   src\\                 the application itself
   models\\en_hi\\        the translation model
   models\\dictionary\\   the dictionary database
@@ -330,7 +330,7 @@ def write_bundle_docs(output: Path, python_version: str) -> None:
 
 
 def copy_bat_files(output: Path) -> None:
-    for name in ("Start SETU.bat", "Check SETU.bat", "Setu.py"):
+    for name in ("Start Anuvad Plus.bat", "Check Anuvad Plus.bat", "AnuvadPlus.py"):
         source = PROJECT_ROOT / "scripts" / name
         if source.exists():
             shutil.copy2(source, output / name)
@@ -406,7 +406,7 @@ def main(argv=None) -> int:
         print("Zip: %s (%s)" % (archive, _human(archive.stat().st_size)))
 
     print(
-        "\nCopy this folder to the offline PC and double-click 'Start SETU.bat'."
+        "\nCopy this folder to the offline PC and double-click 'Start Anuvad Plus.bat'."
         "\nNothing needs to be installed there except Python itself."
     )
     return 0

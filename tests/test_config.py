@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from setu.config import Settings
+from anuvad.config import Settings
 
 
 class TestSettings:

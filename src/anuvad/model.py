@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Sequence
 
-MODEL_ENV_VAR = "SETU_MODEL_DIR"
+MODEL_ENV_VAR = "ANUVAD_MODEL_DIR"
 
 #: Name of the folder a model is expected to live in, relative to a search root.
 MODEL_DIR_NAME = os.path.join("models", "en_hi")
@@ -43,7 +43,7 @@ def user_data_dir() -> Path:
         base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
     else:
         base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
-    return Path(base) / "Setu"
+    return Path(base) / "AnuvadPlus"
 
 
 def candidate_model_dirs(extra: Optional[Sequence[Path]] = None) -> List[Path]:

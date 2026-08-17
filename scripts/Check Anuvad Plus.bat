@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
-title SETU - Check
+title Anuvad Plus - Check
 cd /d "%~dp0"
 
 echo ============================================================
-echo   SETU - checking this installation
+echo   Anuvad Plus - checking this installation
 echo ============================================================
 echo.
 
@@ -23,7 +23,7 @@ if not defined PY_CMD (
     exit /b 1
 )
 
-%PY_CMD% "%~dp0Setu.py" --check
+%PY_CMD% "%~dp0AnuvadPlus.py" --check
 echo.
 pause
 endlocal

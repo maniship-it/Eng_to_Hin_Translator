@@ -11,6 +11,7 @@ application can share one file safely.
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import re
@@ -19,15 +20,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
 
+from . import hindi
 from .model import app_root, user_data_dir
+from .pronunciation import Pronunciation
 
-DICTIONARY_ENV_VAR = "SETU_DICTIONARY"
+DICTIONARY_ENV_VAR = "ANUVAD_DICTIONARY"
 
 #: Location of the database relative to a search root.
 DICTIONARY_PATH = os.path.join("models", "dictionary", "dictionary.sqlite")
 
 #: The schema this reader understands.
-SUPPORTED_SCHEMA_VERSION = 1
+SUPPORTED_SCHEMA_VERSION = 2
 
 SOURCE_ADMIN = "admin"
 SOURCE_FREEDICT = "freedict"
@@ -75,6 +78,12 @@ class Entry:
     senses: List[Sense] = field(default_factory=list)
     #: Set when the search term was an inflected form, e.g. "running" -> "run".
     matched_form: str = ""
+    #: How the word is said, when the pronunciation dictionary knows it.
+    pronunciation: Optional[Pronunciation] = None
+
+    @property
+    def has_pronunciation(self) -> bool:
+        return self.pronunciation is not None and not self.pronunciation.is_empty
 
     @property
     def hindi_meanings(self) -> List[str]:
@@ -281,13 +290,38 @@ class Dictionary:
         senses.sort(key=lambda s: _SOURCE_ORDER.get(s.source, 9))
         return senses
 
+    def _pronunciation_for(self, entry_id: int) -> Optional[Pronunciation]:
+        try:
+            row = self._connection.execute(
+                "SELECT arpabet, ipa, respelling, syllables FROM pronunciations"
+                " WHERE entry_id = ?",
+                (entry_id,),
+            ).fetchone()
+        except sqlite3.Error:
+            return None
+        if row is None or not row["arpabet"]:
+            return None
+        return Pronunciation(
+            arpabet=row["arpabet"] or "",
+            ipa=row["ipa"] or "",
+            respelling=row["respelling"] or "",
+            syllable_count=int(row["syllables"] or 0),
+        )
+
+    def _entry_from_row(self, row) -> Entry:
+        return Entry(
+            word=row["word"],
+            senses=self._senses_for(row["id"]),
+            pronunciation=self._pronunciation_for(row["id"]),
+        )
+
     def _lookup_exact(self, word: str) -> Optional[Entry]:
         row = self._connection.execute(
             "SELECT id, word FROM entries WHERE word_lower = ?", (word.lower(),)
         ).fetchone()
         if row is None:
             return None
-        return Entry(word=row["word"], senses=self._senses_for(row["id"]))
+        return self._entry_from_row(row)
 
     def base_forms(self, word: str) -> List[str]:
         """Candidate dictionary forms for a possibly inflected ``word``."""
@@ -362,43 +396,144 @@ class Dictionary:
         ).fetchall()
         return [row["word"] for row in rows]
 
-    def reverse_lookup(self, hindi: str, limit: int = 25) -> List[Entry]:
-        """English head words whose Hindi meanings match ``hindi``."""
-        cleaned = (hindi or "").strip()
+    def reverse_lookup(self, hindi_word: str, limit: int = 25) -> List[Entry]:
+        """English head words whose Hindi meanings match ``hindi_word``.
+
+        Matching is done on the folded form, so a nukta or nasal-mark
+        difference between what was typed and what the source recorded does
+        not hide the answer. Exact matches are listed before prefix ones.
+        """
+        cleaned = hindi.display(hindi_word)
         if not cleaned:
             return []
+        key = hindi.normalize(cleaned)
+        if not key:
+            return []
+
+        seen: List[int] = []
         rows = self._connection.execute(
-            "SELECT DISTINCT entry_id FROM hindi_terms WHERE term_lower = ?"
-            " LIMIT ?",
-            (cleaned.lower(), int(limit)),
+            "SELECT DISTINCT entry_id FROM hindi_terms WHERE term_norm = ? LIMIT ?",
+            (key, int(limit)),
         ).fetchall()
-        if not rows:
-            rows = self._connection.execute(
+        seen.extend(row["entry_id"] for row in rows)
+
+        if len(seen) < limit:
+            more = self._connection.execute(
                 "SELECT DISTINCT entry_id FROM hindi_terms"
-                " WHERE term_lower >= ? AND term_lower < ? LIMIT ?",
-                (cleaned.lower(), cleaned.lower() + "￿", int(limit)),
+                " WHERE term_norm >= ? AND term_norm < ? LIMIT ?",
+                (key, key + "\uffff", int(limit)),
             ).fetchall()
+            for row in more:
+                if row["entry_id"] not in seen:
+                    seen.append(row["entry_id"])
 
         entries: List[Entry] = []
-        for row in rows:
+        for entry_id in seen[:limit]:
             record = self._connection.execute(
-                "SELECT id, word FROM entries WHERE id = ?", (row["entry_id"],)
+                "SELECT id, word FROM entries WHERE id = ?", (entry_id,)
             ).fetchone()
             if record is not None:
-                entries.append(
-                    Entry(word=record["word"], senses=self._senses_for(record["id"]))
-                )
+                entries.append(self._entry_from_row(record))
         return entries
+
+    def hindi_suggest(self, prefix: str, limit: int = 25) -> List[str]:
+        """Hindi words beginning with ``prefix``, for Devanagari autocomplete."""
+        key = hindi.normalize(prefix)
+        if not key:
+            return []
+        rows = self._connection.execute(
+            "SELECT term, MIN(LENGTH(term)) AS n FROM hindi_terms"
+            " WHERE term_norm >= ? AND term_norm < ?"
+            " GROUP BY term_norm ORDER BY n, term LIMIT ?",
+            (key, key + "\uffff", int(limit)),
+        ).fetchall()
+        return [row["term"] for row in rows]
+
+    def similar_words(self, word: str, limit: int = 8) -> List[str]:
+        """Head words spelled similarly to ``word`` — the "did you mean" list.
+
+        Candidates are gathered from a few cheap prefix buckets rather than the
+        whole dictionary, which keeps this fast enough to run on a failed
+        lookup: the correct word almost always shares a first letter with the
+        typo, or is the typo with its first two letters swapped or one letter
+        dropped.
+        """
+        cleaned = (word or "").strip().lower()
+        if len(cleaned) < 2:
+            return []
+
+        prefixes = {cleaned[0]}
+        prefixes.add(cleaned[1])                      # a dropped first letter
+        if len(cleaned) > 2:
+            prefixes.add(cleaned[1] + cleaned[0])     # swapped first two
+
+        low, high = max(1, len(cleaned) - 3), len(cleaned) + 3
+        candidates: List[str] = []
+        for prefix in prefixes:
+            rows = self._connection.execute(
+                "SELECT word, word_lower FROM entries"
+                " WHERE word_lower >= ? AND word_lower < ?"
+                "   AND LENGTH(word_lower) BETWEEN ? AND ?",
+                (prefix, prefix + "\uffff", low, high),
+            ).fetchall()
+            candidates.extend(
+                (row["word"], row["word_lower"]) for row in rows
+            )
+
+        if not candidates:
+            return []
+
+        matcher = difflib.SequenceMatcher()
+        matcher.set_seq2(cleaned)
+        scored = []
+        for display_word, lowered in candidates:
+            if lowered == cleaned:
+                continue
+            matcher.set_seq1(lowered)
+            # Cheap length check first; ratio() is the expensive part.
+            if matcher.real_quick_ratio() < 0.7 or matcher.quick_ratio() < 0.7:
+                continue
+            score = matcher.ratio()
+            if score >= 0.72:
+                scored.append((score, display_word))
+
+        scored.sort(key=lambda item: (-item[0], len(item[1]), item[1]))
+        out: List[str] = []
+        for _, display_word in scored:
+            if display_word not in out:
+                out.append(display_word)
+            if len(out) >= limit:
+                break
+        return out
+
+    def related_words(self, entry: Entry, limit: int = 12) -> List[str]:
+        """Words related in meaning — synonyms first, then antonyms."""
+        related = list(entry.synonyms)
+        for word in entry.antonyms:
+            if word not in related:
+                related.append(word)
+        return related[:limit]
+
+    @staticmethod
+    def detect_direction(query: str) -> str:
+        """``"hi-en"`` when the query is Devanagari, otherwise ``"en-hi"``."""
+        return "hi-en" if hindi.has_devanagari(query or "") else "en-hi"
 
     def search(self, query: str, limit: int = 25) -> List[Entry]:
         """Look up ``query`` in whichever direction its script implies."""
         cleaned = (query or "").strip()
         if not cleaned:
             return []
-        if _DEVANAGARI_RE.search(cleaned):
+        if self.detect_direction(cleaned) == "hi-en":
             return self.reverse_lookup(cleaned, limit=limit)
         entry = self.lookup(cleaned)
         return [entry] if entry is not None else []
+
+    def suggest_either(self, text: str, limit: int = 40) -> List[str]:
+        """Autocomplete in whichever script the user is typing."""
+        if self.detect_direction(text) == "hi-en":
+            return self.hindi_suggest(text, limit=limit)
+        return self.suggest(text, limit=limit)
 
     def administrative_terms(self, limit: int = 0) -> List[Entry]:
         """Every term from the curated administrative glossary."""
@@ -412,10 +547,7 @@ class Dictionary:
             query += " LIMIT ?"
             parameters = (SOURCE_ADMIN, int(limit))
         rows = self._connection.execute(query, parameters).fetchall()
-        return [
-            Entry(word=row["word"], senses=self._senses_for(row["id"]))
-            for row in rows
-        ]
+        return [self._entry_from_row(row) for row in rows]
 
     def administrative_categories(self) -> List[str]:
         rows = self._connection.execute(

@@ -10,7 +10,7 @@ import sqlite3
 
 import pytest
 
-from setu.dictionary import (
+from anuvad.dictionary import (
     Dictionary,
     DictionaryError,
     DictionaryNotFoundError,
@@ -25,7 +25,9 @@ from setu.dictionary import (
 class TestOpening:
     def test_opens_and_reports_metadata(self, dictionary):
         meta = dictionary.meta()
-        assert meta["schema_version"] == "1"
+        from anuvad.dictionary import SUPPORTED_SCHEMA_VERSION
+
+        assert meta["schema_version"] == str(SUPPORTED_SCHEMA_VERSION)
         assert int(meta["entries"]) == dictionary.count_entries()
 
     def test_missing_file_raises(self, tmp_path):
@@ -52,13 +54,13 @@ class TestOpening:
             Dictionary.open(path)
 
     def test_discovery_uses_the_environment_variable(self, dictionary_path, monkeypatch):
-        monkeypatch.setenv("SETU_DICTIONARY", str(dictionary_path))
+        monkeypatch.setenv("ANUVAD_DICTIONARY", str(dictionary_path))
         assert discover_dictionary() == dictionary_path
 
     def test_discovery_reports_where_it_looked(self, tmp_path, monkeypatch):
-        monkeypatch.delenv("SETU_DICTIONARY", raising=False)
-        monkeypatch.setattr("setu.dictionary.app_root", lambda: tmp_path / "app")
-        monkeypatch.setattr("setu.dictionary.user_data_dir", lambda: tmp_path / "u")
+        monkeypatch.delenv("ANUVAD_DICTIONARY", raising=False)
+        monkeypatch.setattr("anuvad.dictionary.app_root", lambda: tmp_path / "app")
+        monkeypatch.setattr("anuvad.dictionary.user_data_dir", lambda: tmp_path / "u")
         with pytest.raises(DictionaryNotFoundError, match="Looked in"):
             discover_dictionary()
 
@@ -240,3 +242,90 @@ class TestEntryHelpers:
 
     def test_words_in_ignores_devanagari_and_numbers(self):
         assert words_in("42 नमस्ते test") == ["test"]
+
+
+class TestPronunciation:
+    def test_a_known_word_has_a_pronunciation(self, dictionary):
+        entry = dictionary.lookup("government")
+        assert entry.has_pronunciation
+        assert entry.pronunciation.ipa
+        assert entry.pronunciation.respelling
+        assert entry.pronunciation.syllable_count == 3
+
+    def test_pronunciation_survives_an_inflected_lookup(self, dictionary):
+        entry = dictionary.lookup("governments")
+        assert entry.has_pronunciation
+
+    def test_a_word_without_one_says_so(self, dictionary):
+        entry = dictionary.lookup("Joint Secretary")
+        assert not entry.has_pronunciation
+
+
+class TestHindiSearch:
+    def test_nukta_spellings_agree(self, dictionary):
+        """मंज़ूरी and मंजूरी differ by a nukta and must find the same words."""
+        with_nukta = [e.word for e in dictionary.reverse_lookup("मंज़ूरी")]
+        without = [e.word for e in dictionary.reverse_lookup("मंजूरी")]
+        assert with_nukta and set(with_nukta) == set(without)
+
+    def test_zero_width_characters_are_ignored(self, dictionary):
+        assert dictionary.reverse_lookup("सर‍कार") == \
+               dictionary.reverse_lookup("सरकार") or \
+               [e.word for e in dictionary.reverse_lookup("सर‍कार")] == \
+               [e.word for e in dictionary.reverse_lookup("सरकार")]
+
+    def test_hindi_prefix_suggestions(self, dictionary):
+        assert any(word.startswith("सर") for word in dictionary.hindi_suggest("सर"))
+
+    def test_hindi_suggest_is_empty_for_english(self, dictionary):
+        assert dictionary.hindi_suggest("gov") == []
+
+    def test_direction_detection(self, dictionary):
+        assert dictionary.detect_direction("सरकार") == "hi-en"
+        assert dictionary.detect_direction("government") == "en-hi"
+        assert dictionary.detect_direction("") == "en-hi"
+
+    def test_suggest_either_follows_the_script(self, dictionary):
+        assert all("ऀ" <= w[0] <= "ॿ"
+                   for w in dictionary.suggest_either("सर"))
+        assert all(w[0].isascii() for w in dictionary.suggest_either("gov"))
+
+    def test_reverse_lookup_of_nothing(self, dictionary):
+        assert dictionary.reverse_lookup("") == []
+        assert dictionary.reverse_lookup("   ") == []
+
+
+class TestSimilarWords:
+    @pytest.mark.parametrize(
+        "typo,expected",
+        [
+            ("governmnet", "government"),
+            ("governmen", "government"),
+            ("hapy", "happy"),
+            ("stydy", "study"),
+            ("mose", "mouse"),
+        ],
+    )
+    def test_typos_suggest_the_right_word(self, dictionary, typo, expected):
+        assert expected in [w.lower() for w in dictionary.similar_words(typo)]
+
+    def test_the_word_itself_is_not_suggested(self, dictionary):
+        assert "government" not in [
+            w.lower() for w in dictionary.similar_words("government")
+        ]
+
+    def test_very_short_input_is_ignored(self, dictionary):
+        assert dictionary.similar_words("a") == []
+        assert dictionary.similar_words("") == []
+
+    def test_nonsense_suggests_nothing(self, dictionary):
+        assert dictionary.similar_words("qqqqzzzxw") == []
+
+    def test_the_limit_is_respected(self, dictionary):
+        assert len(dictionary.similar_words("governmen", limit=2)) <= 2
+
+    def test_related_words_come_from_the_thesaurus(self, dictionary):
+        entry = dictionary.lookup("happy")
+        related = dictionary.related_words(entry)
+        assert related
+        assert "unhappy" in [w.lower() for w in related]
