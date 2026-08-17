@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "entohin"
+version = "1.0.0"
+description = "Offline English to Hindi translator with a Tkinter desktop interface"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = [
+    "ctranslate2>=4.4,<5",
+    "sentencepiece>=0.2,<0.3",
+]
+
+[project.scripts]
+entohin = "entohin.__main__:main"
+
+[project.gui-scripts]
+entohin-gui = "entohin.gui:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+markers = [
+    "integration: tests that load a real CTranslate2 model",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    # Tk widgets finalised after the interpreter tears down the event loop.
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]

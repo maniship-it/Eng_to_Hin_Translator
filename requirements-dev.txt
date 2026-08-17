@@ -1,0 +1,6 @@
+# Development and test dependencies (not needed to run the application).
+-r requirements.txt
+
+pytest>=7.4
+numpy>=1.24        # used by tools/make_test_model.py to build a test model
+pyinstaller>=6.0   # optional: build a standalone Windows .exe

@@ -1,0 +1,9 @@
+# Runtime dependencies for the offline English-to-Hindi translator.
+#
+# Both ship as pre-built Windows wheels, so `pip download --platform win_amd64`
+# can collect them on any machine for an offline install.
+# tkinter is not listed: it comes with the official Python installer for
+# Windows (keep the "tcl/tk and IDLE" option ticked).
+
+ctranslate2>=4.4,<5      # neural inference engine (CPU, no PyTorch needed)
+sentencepiece>=0.2,<0.3  # sub-word tokenizer used by the model

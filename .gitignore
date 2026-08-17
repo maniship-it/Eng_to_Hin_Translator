@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv-*/
+venv/
+.pytest_cache/
+
+# Build output
+build/
+dist/
+*.spec.bak
+
+# The model and the offline bundle are large binaries: fetch them with
+# tools/fetch_model.py rather than committing them.
+models/
+wheels/
+*.argosmodel
