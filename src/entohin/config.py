@@ -17,6 +17,7 @@ class Settings:
     """Everything the GUI lets the user change, plus where the model lives."""
 
     model_dir: str = ""
+    dictionary_path: str = ""
     beam_size: int = 4
     max_batch_size: int = 16
     compute_type: str = "int8"

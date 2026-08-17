@@ -29,6 +29,13 @@ if not exist "models\en_hi\model\model.bin" (
     if errorlevel 1 goto :failed
 )
 
+if not exist "models\dictionary\dictionary.sqlite" (
+    echo.
+    echo Dictionary not found - building it now ...
+    python tools\build_dictionary.py
+    if errorlevel 1 goto :failed
+)
+
 echo.
 echo Running PyInstaller ...
 python -m PyInstaller --noconfirm entohin.spec

@@ -4,9 +4,10 @@ Run this ONCE on a machine with internet access (any OS -- the Windows wheels
 are downloaded cross-platform).  It produces::
 
     dist/EngToHinTranslator-Offline/
-        wheels/          every Python dependency as a .whl
-        models/en_hi/    the neural translation model
-        src/             the application
+        wheels/               every Python dependency as a .whl
+        models/en_hi/         the neural translation model
+        models/dictionary/    the English-Hindi dictionary database
+        src/                  the application
         tools/  scripts/ helper scripts, install.bat, run.bat
         requirements.txt README.md INSTALL.txt
 
@@ -18,6 +19,7 @@ Usage::
     python tools/make_offline_bundle.py
     python tools/make_offline_bundle.py --python-version 312 --zip
     python tools/make_offline_bundle.py --skip-model   # wheels only
+    python tools/make_offline_bundle.py --skip-dictionary
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ SOURCE_ITEMS = [
     "tools",
     "scripts",
     "tests",
+    "data",
     "requirements.txt",
     "requirements-dev.txt",
     "pyproject.toml",
@@ -110,6 +113,16 @@ def fetch_model(destination: Path, archive: str = "") -> None:
         raise SystemExit("Fetching the model failed.")
 
 
+def build_dictionary(destination: Path) -> None:
+    """Compile the English-Hindi dictionary straight into the bundle."""
+    sys.path.insert(0, str(PROJECT_ROOT / "tools"))
+    import build_dictionary as builder  # noqa: E402  (path set above)
+
+    code = builder.main(["--dest", str(destination)])
+    if code != 0:
+        raise SystemExit("Building the dictionary failed.")
+
+
 def copy_sources(output: Path) -> None:
     print("Copying application files…")
     for item in SOURCE_ITEMS:
@@ -180,6 +193,20 @@ TROUBLESHOOTING
   "No translation model found"
       The models\\en_hi folder is missing. Copy it from this bundle into the
       installation folder, or use Tools -> Choose model folder in the app.
+
+  "No dictionary database found"
+      The models\\dictionary folder is missing. The translator still works;
+      only the Dictionary tab needs it. Copy the folder across, or use
+      Dictionary -> Choose dictionary file in the app.
+
+USING THE DICTIONARY
+--------------------
+  Open the Dictionary tab, or press Ctrl+D. You can also double-click any
+  word in the translation panes to look it up.
+
+  It gives Hindi meanings, part of speech, English and Hindi definitions,
+  synonyms and antonyms, and example sentences - plus a glossary of central
+  government administrative terms in both languages.
 """
 
 
@@ -222,6 +249,8 @@ def main(argv=None) -> int:
                         help="Do not download the model (wheels and code only).")
     parser.add_argument("--skip-wheels", action="store_true",
                         help="Do not download wheels (model and code only).")
+    parser.add_argument("--skip-dictionary", action="store_true",
+                        help="Do not build the dictionary database.")
     parser.add_argument("--model-archive", default="",
                         help="Use an already-downloaded .argosmodel file.")
     parser.add_argument("--zip", action="store_true",
@@ -241,6 +270,10 @@ def main(argv=None) -> int:
 
     if not args.skip_model:
         fetch_model(output / "models" / "en_hi", args.model_archive)
+        print()
+
+    if not args.skip_dictionary:
+        build_dictionary(output / "models" / "dictionary" / "dictionary.sqlite")
         print()
 
     copy_sources(output)

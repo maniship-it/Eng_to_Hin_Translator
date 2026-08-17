@@ -82,7 +82,7 @@ def pump(app, predicate, timeout: float = 90.0) -> bool:
 
 
 @pytest.fixture
-def app(tk_available, ct2_model_dir, monkeypatch):
+def app(tk_available, ct2_model_dir, dictionary_path, monkeypatch):
     from entohin import gui as gui_module
     from entohin.config import Settings
 
@@ -95,6 +95,7 @@ def app(tk_available, ct2_model_dir, monkeypatch):
 
     settings = Settings()
     settings.model_dir = str(ct2_model_dir)
+    settings.dictionary_path = str(dictionary_path)
 
     instance = gui_module.TranslatorApp(settings)
     instance.dialogs = dialogs
@@ -289,3 +290,144 @@ class TestModelFolder:
         app.choose_model_folder()
         app.update()
         assert "error" in [kind for kind, _ in app.dialogs.calls]
+
+
+class TestDictionaryTab:
+    def test_dictionary_loads_on_demand(self, app):
+        app.show_dictionary()
+        app.update()
+        assert app.dictionary_panel.dictionary is not None
+
+    def test_lookup_shows_hindi_and_definition(self, app):
+        app.show_dictionary()
+        app.dictionary_panel.search("government")
+        app.update()
+        shown = app.dictionary_panel.view.get("1.0", "end-1c")
+        assert "government" in shown
+        assert "सरकार" in shown
+        assert "governing authority" in shown
+
+    def test_lookup_shows_thesaurus(self, app):
+        app.show_dictionary()
+        app.dictionary_panel.search("happy")
+        app.update()
+        shown = app.dictionary_panel.view.get("1.0", "end-1c")
+        assert "synonyms" in shown
+        assert "antonyms" in shown
+        assert "unhappy" in shown
+
+    def test_lookup_shows_examples(self, app):
+        app.show_dictionary()
+        app.dictionary_panel.search("happy")
+        app.update()
+        assert "a happy smile" in app.dictionary_panel.view.get("1.0", "end-1c")
+
+    def test_inflected_form_is_reported(self, app):
+        app.show_dictionary()
+        app.dictionary_panel.search("governments")
+        app.update()
+        assert "governments" in app.dictionary_panel.view.get("1.0", "end-1c")
+
+    def test_hindi_query_searches_in_reverse(self, app):
+        app.show_dictionary()
+        app.dictionary_panel.search("सरकार")
+        app.update()
+        assert "government" in app.dictionary_panel.view.get("1.0", "end-1c")
+
+    def test_unknown_word_offers_suggestions(self, app):
+        app.show_dictionary()
+        app.dictionary_panel.search("governmen")
+        app.update()
+        shown = app.dictionary_panel.view.get("1.0", "end-1c")
+        assert "No exact match" in shown or "government" in shown
+        assert app.dictionary_panel.results.size() > 0
+
+    def test_missing_word_says_so(self, app):
+        app.show_dictionary()
+        app.dictionary_panel.search("zzzznotaword")
+        app.update()
+        assert "Not found" in app.dictionary_panel.view.get("1.0", "end-1c")
+
+    def test_administrative_glossary_can_be_browsed(self, app):
+        app.show_administrative_glossary()
+        app.update()
+        assert app.dictionary_panel.results.size() >= 150
+        shown = app.dictionary_panel.view.get("1.0", "end-1c")
+        assert "administrative term" in shown
+
+    def test_administrative_entry_shows_both_languages(self, app):
+        app.show_dictionary()
+        app.dictionary_panel.search("Joint Secretary")
+        app.update()
+        shown = app.dictionary_panel.view.get("1.0", "end-1c")
+        assert "संयुक्त सचिव" in shown
+        assert "A senior officer heading a wing" in shown
+        assert "मंत्रालय के किसी स्कंध" in shown
+        assert "The proposal requires the approval" in shown
+        assert "प्रस्ताव के लिए संयुक्त सचिव" in shown
+
+    def test_glossary_filters_by_category(self, app):
+        app.show_administrative_glossary()
+        app.update()
+        everything = app.dictionary_panel.results.size()
+        app.dictionary_panel.category.set("designation")
+        app.dictionary_panel.browse_administrative()
+        app.update()
+        filtered = app.dictionary_panel.results.size()
+        assert 0 < filtered < everything
+
+    def test_selecting_a_result_shows_it(self, app):
+        app.show_dictionary()
+        app.dictionary_panel.search("govern")
+        app.update()
+        panel = app.dictionary_panel
+        if panel.results.size() > 1:
+            panel.results.selection_clear(0, tkinter.END)
+            panel.results.selection_set(1)
+            panel._on_result_selected(None)
+            app.update()
+        assert panel.view.get("1.0", "end-1c").strip()
+
+    def test_lookup_from_the_translator_pane(self, app):
+        app.source_text.delete("1.0", tkinter.END)
+        app.source_text.insert("1.0", "The government announced it.")
+        app.source_text.tag_add(tkinter.SEL, "1.4", "1.14")
+        app.update()
+        app.lookup_selection(app.source_text)
+        app.update()
+        assert app.notebook.nametowidget(app.notebook.select()) is app.dictionary_panel
+        assert "सरकार" in app.dictionary_panel.view.get("1.0", "end-1c")
+
+    def test_word_at_cursor_uses_the_selection(self, app):
+        app.source_text.delete("1.0", tkinter.END)
+        app.source_text.insert("1.0", "hello world")
+        app.source_text.tag_add(tkinter.SEL, "1.0", "1.5")
+        assert app.word_at_cursor(app.source_text) == "hello"
+
+    def test_lookup_of_a_non_word_is_ignored(self, app):
+        app.source_text.delete("1.0", tkinter.END)
+        app.source_text.insert("1.0", "12345")
+        app.source_text.tag_add(tkinter.SEL, "1.0", "1.5")
+        app.lookup_selection(app.source_text)
+        app.update()
+        assert "Select a word" in app.status.cget("text")
+
+    def test_font_changes_reach_the_dictionary(self, app):
+        before = app.dictionary_panel.body_font.cget("size")
+        app.adjust_font(2)
+        app.update()
+        assert app.dictionary_panel.body_font.cget("size") == before + 2
+
+    def test_missing_dictionary_is_reported_in_the_panel(self, app, tmp_path,
+                                                         monkeypatch):
+        app.dictionary_panel.close()
+        app.settings.dictionary_path = str(tmp_path / "absent.sqlite")
+        monkeypatch.setenv("ENTOHIN_DICTIONARY", str(tmp_path / "absent.sqlite"))
+        monkeypatch.setattr("entohin.dictionary.app_root", lambda: tmp_path)
+        monkeypatch.setattr("entohin.dictionary.user_data_dir", lambda: tmp_path)
+        assert not app.dictionary_panel.ensure_loaded()
+        app.update()
+        shown = app.dictionary_panel.view.get("1.0", "end-1c")
+        assert "not available" in shown.lower()
+        # The translator itself must keep working.
+        assert app.translator is not None

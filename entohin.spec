@@ -11,7 +11,8 @@ and everything it needs -- no Python installation required on the target PC.
 
 The model is deliberately NOT embedded: it is large and changes independently.
 ``scripts/build_windows_exe.bat`` copies ``models/`` next to the .exe, which is
-where the application looks when it is frozen.
+where the application looks when it is frozen.  The dictionary database in
+``models/dictionary/`` travels the same way.
 """
 
 from PyInstaller.utils.hooks import collect_dynamic_libs
@@ -29,6 +30,9 @@ a = Analysis(
         "ctranslate2",
         "sentencepiece",
         "entohin.gui",
+        "entohin.gui_dictionary",
+        "entohin.dictionary",
+        "entohin.textio",
         "entohin.translator",
         "entohin.model",
         "entohin.config",

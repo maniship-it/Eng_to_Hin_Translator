@@ -18,6 +18,7 @@ from typing import Optional
 
 from . import model as model_module
 from .config import Settings
+from .gui_dictionary import DictionaryPanel
 from .textio import read_text_file, write_text_file
 from .translator import (
     Report,
@@ -133,6 +134,20 @@ class TranslatorApp(tk.Tk):
                                   variable=self._sync_scroll)
         menubar.add_cascade(label="View", menu=view_menu)
 
+        dictionary_menu = tk.Menu(menubar, tearoff=0)
+        dictionary_menu.add_command(label="Open dictionary", accelerator="Ctrl+D",
+                                    command=self.show_dictionary)
+        dictionary_menu.add_command(
+            label="Look up selected word",
+            command=lambda: self.lookup_selection(self._focused_text()),
+        )
+        dictionary_menu.add_separator()
+        dictionary_menu.add_command(label="Administrative glossary",
+                                    command=self.show_administrative_glossary)
+        dictionary_menu.add_command(label="Choose dictionary file…",
+                                    command=self.choose_dictionary_file)
+        menubar.add_cascade(label="Dictionary", menu=dictionary_menu)
+
         tools_menu = tk.Menu(menubar, tearoff=0)
         tools_menu.add_command(label="Settings…", command=self.open_settings)
         tools_menu.add_command(label="Choose model folder…",
@@ -188,8 +203,14 @@ class TranslatorApp(tk.Tk):
         self.progress_label.pack(side=tk.RIGHT, padx=(0, 8))
 
     def _build_panes(self) -> None:
-        container = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
-        container.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 6))
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 6))
+
+        translate_tab = ttk.Frame(self.notebook, padding=(0, 6))
+        self.notebook.add(translate_tab, text="  Translate  ")
+
+        container = ttk.Panedwindow(translate_tab, orient=tk.HORIZONTAL)
+        container.pack(fill=tk.BOTH, expand=True)
 
         source_frame = ttk.Frame(container)
         target_frame = ttk.Frame(container)
@@ -233,6 +254,15 @@ class TranslatorApp(tk.Tk):
         self.target_text = self._make_text(target_frame, self.target_font)
         self.target_text.configure(background="#fbfbfd")
 
+        self.dictionary_panel = DictionaryPanel(
+            self.notebook,
+            self.settings,
+            hindi_family=self.target_font.actual("family"),
+            base_size=base_size,
+        )
+        self.notebook.add(self.dictionary_panel, text="  Dictionary  ")
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
+
         self._apply_wrap()
 
     def _make_text(self, parent: ttk.Frame, font: tkfont.Font) -> tk.Text:
@@ -269,6 +299,9 @@ class TranslatorApp(tk.Tk):
 
     def _attach_context_menu(self, text: tk.Text) -> None:
         menu = tk.Menu(text, tearoff=0)
+        menu.add_command(label="Look up in dictionary",
+                         command=lambda: self.lookup_selection(text))
+        menu.add_separator()
         menu.add_command(label="Cut", command=lambda: text.event_generate("<<Cut>>"))
         menu.add_command(label="Copy", command=lambda: text.event_generate("<<Copy>>"))
         menu.add_command(label="Paste", command=lambda: text.event_generate("<<Paste>>"))
@@ -283,6 +316,33 @@ class TranslatorApp(tk.Tk):
                 menu.grab_release()
 
         text.bind("<Button-3>", popup)
+        text.bind("<Double-Button-1>", lambda e: self._on_double_click(e, text))
+
+    def _on_double_click(self, event: tk.Event, text: tk.Text) -> None:
+        # Let Tk select the word first, then look it up.
+        self.after_idle(lambda: self.lookup_selection(text, quiet=True))
+
+    def word_at_cursor(self, text: tk.Text) -> str:
+        """The selected text, or the word under the insertion cursor."""
+        try:
+            if text.tag_ranges(tk.SEL):
+                return text.get(tk.SEL_FIRST, tk.SEL_LAST).strip()
+        except tk.TclError:
+            pass
+        try:
+            return text.get("insert wordstart", "insert wordend").strip()
+        except tk.TclError:
+            return ""
+
+    def lookup_selection(self, text: tk.Text, quiet: bool = False) -> None:
+        """Show the dictionary tab with the selected word looked up."""
+        word = self.word_at_cursor(text)
+        if not word or not any(character.isalpha() for character in word):
+            if not quiet:
+                self.status.configure(text="Select a word to look up.")
+            return
+        self.notebook.select(self.dictionary_panel)
+        self.dictionary_panel.lookup_word(word)
 
     def _build_statusbar(self) -> None:
         bar = ttk.Frame(self, relief=tk.GROOVE)
@@ -298,6 +358,7 @@ class TranslatorApp(tk.Tk):
         self.bind("<Control-o>", lambda e: (self.open_file(), "break")[1])
         self.bind("<Control-s>", lambda e: (self.save_translation(), "break")[1])
         self.bind("<Control-q>", lambda e: self._on_close())
+        self.bind("<Control-d>", lambda e: (self.show_dictionary(), "break")[1])
         self.bind("<Control-plus>", lambda e: self.adjust_font(1))
         self.bind("<Control-equal>", lambda e: self.adjust_font(1))
         self.bind("<Control-minus>", lambda e: self.adjust_font(-1))
@@ -331,6 +392,20 @@ class TranslatorApp(tk.Tk):
     def _other_text(self, text: tk.Text) -> tk.Text:
         return self.target_text if text is self.source_text else self.source_text
 
+    def _on_tab_changed(self, event: tk.Event) -> None:
+        """Open the dictionary the first time its tab is shown."""
+        try:
+            current = self.notebook.nametowidget(self.notebook.select())
+        except (tk.TclError, KeyError):
+            return
+        if current is self.dictionary_panel:
+            self.dictionary_panel.ensure_loaded()
+
+    def show_dictionary(self) -> None:
+        self.notebook.select(self.dictionary_panel)
+        self.dictionary_panel.ensure_loaded()
+        self.dictionary_panel.search_entry.focus_set()
+
     # -- model ---------------------------------------------------------
 
     def _load_model_async(self) -> None:
@@ -353,6 +428,30 @@ class TranslatorApp(tk.Tk):
 
         self.worker = threading.Thread(target=work, daemon=True)
         self.worker.start()
+
+    def _focused_text(self) -> tk.Text:
+        widget = self.focus_get()
+        return widget if isinstance(widget, tk.Text) else self.source_text
+
+    def show_administrative_glossary(self) -> None:
+        self.notebook.select(self.dictionary_panel)
+        if self.dictionary_panel.ensure_loaded():
+            self.dictionary_panel.browse_administrative()
+
+    def choose_dictionary_file(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Select the dictionary database",
+            filetypes=[("Dictionary database", "*.sqlite *.db"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        self.settings.dictionary_path = path
+        self.settings.save()
+        self.dictionary_panel.close()
+        self.dictionary_panel.load_error = ""
+        if self.dictionary_panel.ensure_loaded():
+            self.notebook.select(self.dictionary_panel)
+            self.status.configure(text="Dictionary loaded from %s" % Path(path).name)
 
     def choose_model_folder(self) -> None:
         directory = filedialog.askdirectory(
@@ -501,6 +600,9 @@ class TranslatorApp(tk.Tk):
         self.target_font.configure(size=size + 1)
         self.settings.font_size = size
         self.settings.save()
+        self.dictionary_panel.apply_fonts(
+            self.target_font.actual("family"), size
+        )
 
     def _apply_wrap(self) -> None:
         wrap = tk.WORD if self._wrap_var().get() else tk.NONE
@@ -540,7 +642,9 @@ class TranslatorApp(tk.Tk):
             "Offline neural machine translation, English to Hindi.\n"
             "Runs entirely on this PC — no internet connection is used.\n\n"
             "Engine: CTranslate2 + SentencePiece\n"
-            "Model: Argos Translate en→hi (CC0 / MIT components)"
+            "Model: Argos Translate en→hi (CC0 / MIT components)\n"
+            "Dictionary: WordNet 3.0, FreeDict eng-hin (GPL-2.0+),\n"
+            "and this project's government administrative glossary"
             % (APP_NAME, __version__),
         )
 
@@ -675,6 +779,7 @@ class TranslatorApp(tk.Tk):
         self.settings.save()
         if self.translator is not None:
             self.translator.close()
+        self.dictionary_panel.close()
         self.destroy()
 
 
@@ -805,6 +910,9 @@ class SettingsDialog(tk.Toplevel):
         settings.save()
 
         self.app.target_font.configure(family=settings.hindi_font_family)
+        self.app.dictionary_panel.apply_fonts(
+            settings.hindi_font_family, settings.font_size
+        )
         self.destroy()
         if needs_reload and self.app.translator is not None:
             self.app._load_model_async()

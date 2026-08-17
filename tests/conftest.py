@@ -64,6 +64,82 @@ def translator(fake_backend: FakeBackend) -> Translator:
     return Translator(fake_backend, Options(max_batch_size=8))
 
 
+def _sense(pos, definition="", examples=(), synonyms=(), antonyms=()):
+    return {
+        "pos": pos,
+        "definition_en": definition,
+        "examples_en": list(examples),
+        "synonyms": list(synonyms),
+        "antonyms": list(antonyms),
+    }
+
+
+#: A small stand-in for WordNet, covering the words the tests look up.
+TEST_WORDNET = {
+    "government": [_sense(
+        "noun", "the organization that is the governing authority of a political unit",
+        ["the government reduced taxes"], ["authorities", "regime"],
+    )],
+    "run": [
+        _sense("verb", "move fast by using one's feet", ["don't run--you'll be out of breath"],
+               ["scat", "dash"]),
+        _sense("noun", "a score in baseball made by a runner touching all four bases"),
+    ],
+    "happy": [_sense(
+        "adjective", "enjoying or showing or marked by joy or pleasure",
+        ["a happy smile", "spent many happy days on the beach"],
+        ["felicitous", "glad"], ["unhappy"],
+    )],
+    "study": [_sense("verb", "consider in detail and subject to an analysis",
+                     ["study the terms of the contract"], ["analyze", "examine"])],
+    "mouse": [_sense("noun", "any of numerous small rodents")],
+    "walk": [_sense("verb", "use one's feet to advance", ["walk, don't run!"])],
+    "carry": [_sense("verb", "move while supporting")],
+    "notification": [_sense("noun", "a request for payment")],
+}
+
+TEST_EXCEPTIONS = {"ran": "run", "mice": "mouse", "ate": "eat"}
+
+#: A small stand-in for the FreeDict English-Hindi dictionary.
+TEST_FREEDICT = {
+    "government": [{"pos": "noun", "hindi": ["सरकार"],
+                    "examples_en": ["The government has announced a new scheme."]}],
+    "run": [{"pos": "verb", "hindi": ["दौड़ना"],
+             "examples_en": ["He can run very fast."]}],
+    "happy": [{"pos": "adjective", "hindi": ["सुखी", "प्रसन्न"],
+               "examples_en": ["She was happy with the result."]}],
+    "study": [{"pos": "verb", "hindi": ["अध्ययन करना"], "examples_en": []}],
+    "mouse": [{"pos": "noun", "hindi": ["चूहा"], "examples_en": []}],
+    "sanction": [{"pos": "noun", "hindi": ["मंज़ूरी"],
+                  "examples_en": ["Without my sanction he signed the letter."]}],
+}
+
+
+@pytest.fixture(scope="session")
+def dictionary_path(tmp_path_factory) -> Path:
+    """Build a small dictionary database with the real builder."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+    import build_dictionary
+
+    admin = build_dictionary.load_admin_glossary(
+        Path(__file__).resolve().parents[1] / "data" / "admin_glossary.tsv"
+    )
+    destination = tmp_path_factory.mktemp("dictionary") / "dictionary.sqlite"
+    build_dictionary.build_database(
+        destination, TEST_WORDNET, TEST_EXCEPTIONS, TEST_FREEDICT, admin
+    )
+    return destination
+
+
+@pytest.fixture
+def dictionary(dictionary_path):
+    from entohin.dictionary import Dictionary
+
+    instance = Dictionary.open(dictionary_path)
+    yield instance
+    instance.close()
+
+
 @pytest.fixture(scope="session")
 def ct2_model_dir(tmp_path_factory) -> Path:
     """Build a tiny real CTranslate2 model, or skip if it cannot be built."""
